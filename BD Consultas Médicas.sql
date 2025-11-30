@@ -89,13 +89,14 @@ INSERT INTO Medico (CodMed, NomeMed, Genero, Telefone, Email, Especialidade) VAL
 (6677990, 'Beatriz Souza', 'F', '(81) 92222-1111', 'beatrizsouza@mail.com', 'Dermatologia'),
 (7788001, 'André Lima', 'M', '(81) 91111-2222', 'andrelima@mail.com', 'Ortopedia'),
 (8899112, 'Camila Rocha', 'F', '(81) 90000-3333', 'camilarocha@mail.com', 'Clínico Geral'),
-(9900223, 'Thiago Barros', 'M', '(81) 98888-4444', 'thiagobarros@mail.com', 'Oftalmologia');
+(9900223, 'Thiago Barros', 'M', '(81) 98888-4444', 'thiagobarros@mail.com', 'Oftalmologia'),
+(1010101, 'Helena Nunes', 'F', '(81) 94400-1212', 'helenanunes@mail.com', 'Ginecologia');
 
 -- Mais Pacientes
 INSERT INTO Paciente (CpfPaciente, NomePac, DataNascimento, Genero, Telefone, Email) VALUES
 ('11122233344', 'João Souza', '1985-02-10', 'M', '(81) 91234-5678', 'joaosouza@mail.com'),
 ('55566677788', 'Maria Oliveira', '1990-11-25', 'F', '(81) 98765-4321', 'mariaoliveira@mail.com'),
-('99988877766', 'Pedro Santos', '1975-06-30', 'M', '(81) 95555-4444', 'pedrosantos@mail.com')
+('99988877766', 'Pedro Santos', '1975-06-30', 'M', '(81) 95555-4444', 'pedrosantos@mail.com'),
 ('12345678901', 'Ana Carolina', '1988-03-12', 'F', '(81) 99111-2233', 'anacarolina@mail.com'),
 ('23456789012', 'Bruno Henrique', '1992-07-18', 'M', '(81) 98222-3344', 'brunohenrique@mail.com'),
 ('34567890123', 'Claudia Ferreira', '2015-09-05', 'F', '(81) 97333-4455', 'claudiaferreira@mail.com'),
@@ -105,10 +106,12 @@ INSERT INTO Paciente (CpfPaciente, NomePac, DataNascimento, Genero, Telefone, Em
 ('78901234567', 'Gabriela Santos', '1982-11-08', 'F', '(81) 93777-8899', 'gabrielasantos@mail.com'),
 ('89012345678', 'Henrique Dias', '1970-04-25', 'M', '(81) 92888-9900', 'henriquedias@mail.com'),
 ('90123456789', 'Isabela Lima', '2012-06-17', 'F', '(81) 91999-0011', 'isabelalima@mail.com'),
-('01234567890', 'Jorge Oliveira', '1965-08-03', 'M', '(81) 90000-1122', 'jorgeoliveira@mail.com');
+('01234567890', 'Jorge Oliveira', '1965-08-03', 'M', '(81) 90000-1122', 'jorgeoliveira@mail.com'),
+('33344455566', 'Laura Mendes', '1994-09-20', 'F', '(81) 94555-3344', 'lauramendes@mail.com');
 
 
 -- Mais Consultas (Cruzando os dados novos e antigos)
+-- Consultas 2025
 INSERT INTO Consulta (CodCli, CodMed, CpfPaciente, Data_Hora) VALUES
 ('0000001', 5793149, '58961234752', '2025-11-04 09:00:00'),
 ('0000003', 1122334, '11122233344', '2025-11-15 14:00:00'),
@@ -123,7 +126,12 @@ INSERT INTO Consulta (CodCli, CodMed, CpfPaciente, Data_Hora) VALUES
 ('0000005', 7788001, '67890123456', '2025-12-20 16:00:00'),
 ('0000007', 8899112, '78901234567', '2025-12-22 08:30:00'),
 ('0000002', 9900223, '89012345678', '2025-12-27 13:00:00'),
+
+
+-- Consultas 2026
+INSERT INTO Consulta (CodCli, CodMed, CpfPaciente, Data_Hora) VALUES
 ('0000001', 2819374, '90123456789', '2026-01-03 10:30:00'),
+('0000007', 1010101, '33344455566', '2026-01-06 09:00:00'),
 ('0000006', 3344556, '01234567890', '2026-01-08 14:30:00'),
 ('0000003', 1122334, '12345678901', '2026-01-10 09:00:00'),
 ('0000004', 5566778, '23456789012', '2026-01-15 15:00:00'),
@@ -134,6 +142,7 @@ INSERT INTO Consulta (CodCli, CodMed, CpfPaciente, Data_Hora) VALUES
 ('0000006', 3344556, '11122233344', '2026-02-05 13:30:00'),
 ('0000003', 5566889, '56789012345', '2026-02-12 09:30:00'),
 ('0000004', 6677990, '89012345678', '2026-02-15 14:00:00'),
-('0000007', 8899112, '90123456789', '2026-02-18 11:00:00');
+('0000007', 8899112, '90123456789', '2026-02-18 11:00:00'),
+('0000007', 1010101, '33344455566', '2026-07-06 09:00:00');
 
 SELECT * FROM Consulta;
