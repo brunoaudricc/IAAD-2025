@@ -1,0 +1,4 @@
+dash
+dash-bootstrap-components
+mysql-connector-python
+pandas

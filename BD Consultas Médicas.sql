@@ -1,4 +1,5 @@
-CREATE DATABASE IF NOT EXISTS GestaoClinica;
+DROP DATABASE IF EXISTS GestaoClinica;
+CREATE DATABASE GestaoClinica;
 USE GestaoClinica;
 
 CREATE TABLE Clinica (
@@ -33,10 +34,10 @@ CREATE TABLE Consulta (
     CpfPaciente VARCHAR(11),
     Data_Hora DATETIME,
     
-    -- Chaves Estrangeiras
-    CONSTRAINT FK_Consulta_Clinica FOREIGN KEY (CodCli) REFERENCES Clinica(CodCli),
-    CONSTRAINT FK_Consulta_Medico FOREIGN KEY (CodMed) REFERENCES Medico(CodMed),
-    CONSTRAINT FK_Consulta_Paciente FOREIGN KEY (CpfPaciente) REFERENCES Paciente(CpfPaciente),
+    -- Chaves Estrangeiras com CASCADE
+    CONSTRAINT FK_Consulta_Clinica FOREIGN KEY (CodCli) REFERENCES Clinica(CodCli) ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT FK_Consulta_Medico FOREIGN KEY (CodMed) REFERENCES Medico(CodMed) ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT FK_Consulta_Paciente FOREIGN KEY (CpfPaciente) REFERENCES Paciente(CpfPaciente) ON DELETE CASCADE ON UPDATE CASCADE,
     
     -- Chave Primária Composta (evita duplicidade de agendamento exato)
     PRIMARY KEY (CodCli, CodMed, CpfPaciente, Data_Hora)
@@ -50,7 +51,7 @@ INSERT INTO Clinica (CodCli, NomeCli, Endereco, Telefone, Email) VALUES
 -- Tabela Médico
 INSERT INTO Medico (CodMed, NomeMed, Genero, Telefone, Email, Especialidade) VALUES
 (2819374, 'Marcela Gomes', 'F', '(81) 98273-3245', 'marcelagomes@mail.com', 'Pediatria'),
-(5793149, 'Amanda Vieira', 'F', '(81) 99240-2571', 'amandavieira@mail.com', 'Pediatria'),
+(5793149, 'Amanda Vieira', 'F', '(81) 99240-2571', 'amandavieira@mail.com', 'Pediatria'), -- Mantido email conforme imagem
 (8532974, 'Lucas Carvalho', 'M', '(81) 98256-5703', 'lucascarvalho@mail.com', 'Oftalmologia'),
 (9183424, 'Alexandre Alencar', 'M', '(81) 99482-4758', 'alexandrealencar@mail.com', 'Oftalmologia');
 
@@ -65,10 +66,13 @@ INSERT INTO Consulta (CodCli, CodMed, CpfPaciente, Data_Hora) VALUES
 ('0000002', 8532974, '34512389765', '2025-12-10 16:40:00'),
 ('0000002', 9183424, '34512389765', '2026-01-05 10:30:00');
 
+
 -- Mais Clínicas
 INSERT INTO Clinica (CodCli, NomeCli, Endereco, Telefone, Email) VALUES
 ('0000003', 'Cardio Vida', 'Rua da Aurora, 295, Boa Vista', '(81) 3222-1010', 'contato@cardiovida.com'),
-('0000004', 'Derma Clin', 'Av. Conselheiro Aguiar, 1500, Boa Viagem', '(81) 3465-2020', 'agendamento@dermaclin.com'),
+('0000004', 'Derma Clin', 'Av. Conselheiro Aguiar, 1500, Boa Viagem', '(81) 3465-2020', 'agendamento@dermaclin.com');
+-- Mais Clínicas
+INSERT INTO Clinica (CodCli, NomeCli, Endereco, Telefone, Email) VALUES
 ('0000005', 'OrtoMed Recife', 'Rua Benfica, 150, Madalena', '(81) 3227-3030', 'contato@ortomed.com'),
 ('0000006', 'NeuroCentro', 'Av. Boa Viagem, 3200, Boa Viagem', '(81) 3326-4040', 'agendamento@neurocentro.com'),
 ('0000007', 'Clínica da Família', 'Rua Imperial, 890, São José', '(81) 3423-5050', 'familia@clinica.com');
@@ -123,10 +127,7 @@ INSERT INTO Consulta (CodCli, CodMed, CpfPaciente, Data_Hora) VALUES
 ('0000005', 7788001, '67890123456', '2025-12-20 16:00:00'),
 ('0000007', 8899112, '78901234567', '2025-12-22 08:30:00'),
 ('0000002', 9900223, '89012345678', '2025-12-27 13:00:00'),
-
-
 -- Consultas 2026
-INSERT INTO Consulta (CodCli, CodMed, CpfPaciente, Data_Hora) VALUES
 ('0000001', 2819374, '90123456789', '2026-01-03 10:30:00'),
 ('0000007', 1010101, '33344455566', '2026-01-06 09:00:00'),
 ('0000006', 3344556, '01234567890', '2026-01-08 14:30:00'),
@@ -142,4 +143,110 @@ INSERT INTO Consulta (CodCli, CodMed, CpfPaciente, Data_Hora) VALUES
 ('0000007', 8899112, '90123456789', '2026-02-18 11:00:00'),
 ('0000007', 1010101, '33344455566', '2026-07-06 09:00:00');
 
+-- ==================== LISTA DE ESPERA ====================
+-- Tabela para armazenar pacientes na lista de espera
+CREATE TABLE ListaEspera (
+    IdEspera INT AUTO_INCREMENT PRIMARY KEY,
+    CodCli CHAR(7) NOT NULL,
+    CodMed INT NOT NULL,
+    CpfPaciente VARCHAR(11) NOT NULL,
+    DataHoraDesejada DATETIME NOT NULL,
+    DataHoraCadastro DATETIME DEFAULT CURRENT_TIMESTAMP,
+    Prioridade INT DEFAULT 0, -- Maior número = maior prioridade
+    Status ENUM('aguardando', 'agendado', 'expirado', 'cancelado') DEFAULT 'aguardando',
+    
+    CONSTRAINT FK_Espera_Clinica FOREIGN KEY (CodCli) REFERENCES Clinica(CodCli) ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT FK_Espera_Medico FOREIGN KEY (CodMed) REFERENCES Medico(CodMed) ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT FK_Espera_Paciente FOREIGN KEY (CpfPaciente) REFERENCES Paciente(CpfPaciente) ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- Tabela de log para registrar as promoções da lista de espera
+CREATE TABLE LogListaEspera (
+    IdLog INT AUTO_INCREMENT PRIMARY KEY,
+    IdEspera INT,
+    CodCli CHAR(7),
+    CodMed INT,
+    CpfPaciente VARCHAR(11),
+    DataHoraConsulta DATETIME,
+    DataHoraPromocao DATETIME DEFAULT CURRENT_TIMESTAMP,
+    Mensagem VARCHAR(255)
+);
+
+-- ==================== TRIGGER ====================
+-- Trigger que é acionado quando uma consulta é cancelada (DELETE)
+-- Automaticamente agenda o próximo paciente da lista de espera
+
+DELIMITER //
+
+CREATE TRIGGER trg_promover_lista_espera
+AFTER DELETE ON Consulta
+FOR EACH ROW
+BEGIN
+    DECLARE v_id_espera INT;
+    DECLARE v_cpf_paciente VARCHAR(11);
+    DECLARE v_data_hora_desejada DATETIME;
+    
+    -- Busca o próximo paciente na lista de espera para o mesmo médico, clínica e horário
+    -- Ordena por prioridade (maior primeiro) e depois por data de cadastro (mais antigo primeiro)
+    SELECT IdEspera, CpfPaciente, DataHoraDesejada
+    INTO v_id_espera, v_cpf_paciente, v_data_hora_desejada
+    FROM ListaEspera
+    WHERE CodCli = OLD.CodCli
+      AND CodMed = OLD.CodMed
+      AND DataHoraDesejada = OLD.Data_Hora
+      AND Status = 'aguardando'
+    ORDER BY Prioridade DESC, DataHoraCadastro ASC
+    LIMIT 1;
+    
+    -- Se encontrou alguém na lista de espera
+    IF v_id_espera IS NOT NULL THEN
+        -- Insere a nova consulta para o paciente da lista de espera
+        INSERT INTO Consulta (CodCli, CodMed, CpfPaciente, Data_Hora)
+        VALUES (OLD.CodCli, OLD.CodMed, v_cpf_paciente, OLD.Data_Hora);
+        
+        -- Atualiza o status na lista de espera
+        UPDATE ListaEspera
+        SET Status = 'agendado'
+        WHERE IdEspera = v_id_espera;
+        
+        -- Registra no log
+        INSERT INTO LogListaEspera (IdEspera, CodCli, CodMed, CpfPaciente, DataHoraConsulta, Mensagem)
+        VALUES (v_id_espera, OLD.CodCli, OLD.CodMed, v_cpf_paciente, OLD.Data_Hora, 
+                CONCAT('Paciente promovido da lista de espera. Consulta original cancelada por: ', OLD.CpfPaciente));
+    END IF;
+END //
+
+DELIMITER ;
+
+-- ==================== INSERIR DADOS NA LISTA DE ESPERA (EXEMPLO) ====================
+-- Pacientes aguardando vaga para consultas existentes
+INSERT INTO ListaEspera (CodCli, CodMed, CpfPaciente, DataHoraDesejada, Prioridade) VALUES
+-- Esperando vaga na consulta do dia 2025-12-10 16:40:00 com Dr. Lucas Carvalho na Visão Recife
+('0000002', 8532974, '11122233344', '2025-12-10 16:40:00', 1),
+('0000002', 8532974, '55566677788', '2025-12-10 16:40:00', 0),
+
+-- Esperando vaga na consulta do dia 2025-12-01 11:30:00 com Dra. Carla Dias na Derma Clin
+('0000004', 5566778, '99988877766', '2025-12-01 11:30:00', 2),
+('0000004', 5566778, '12345678901', '2025-12-01 11:30:00', 1),
+
+-- Esperando vaga na consulta do dia 2026-01-05 10:30:00 com Dr. Alexandre Alencar na Visão Recife
+('0000002', 9183424, '23456789012', '2026-01-05 10:30:00', 0);
+
 SELECT * FROM Consulta;
+
+-- ==================== VISUALIZAR LISTA DE ESPERA ====================
+SELECT 
+    le.IdEspera,
+    c.NomeCli AS Clinica,
+    m.NomeMed AS Medico,
+    m.Especialidade,
+    p.NomePac AS Paciente,
+    le.DataHoraDesejada AS 'Data/Hora Desejada',
+    le.Prioridade,
+    le.Status,
+    le.DataHoraCadastro AS 'Data Cadastro'
+FROM ListaEspera le
+JOIN Clinica c ON le.CodCli = c.CodCli
+JOIN Medico m ON le.CodMed = m.CodMed
+JOIN Paciente p ON le.CpfPaciente = p.CpfPaciente
+ORDER BY le.DataHoraDesejada, le.Prioridade DESC, le.DataHoraCadastro;
