@@ -50,9 +50,9 @@ INSERT INTO Clinica (CodCli, NomeCli, Endereco, Telefone, Email) VALUES
 -- Tabela Médico
 INSERT INTO Medico (CodMed, NomeMed, Genero, Telefone, Email, Especialidade) VALUES
 (2819374, 'Marcela Gomes', 'F', '(81) 98273-3245', 'marcelagomes@mail.com', 'Pediatria'),
-(5793149, 'Amanda Vieira', 'F', '(81) 99240-2571', 'fernandavieira@mail.com', 'Pediatria'), -- Mantido email conforme imagem
+(5793149, 'Amanda Vieira', 'F', '(81) 99240-2571', 'amandavieira@mail.com', 'Pediatria'),
 (8532974, 'Lucas Carvalho', 'M', '(81) 98256-5703', 'lucascarvalho@mail.com', 'Oftalmologia'),
-(9183424, 'Alexandre Alencar', 'M', '(81) 99482-4758', 'fernandoalencar@mail.com', 'Oftalmologia');
+(9183424, 'Alexandre Alencar', 'M', '(81) 99482-4758', 'alexandrealencar@mail.com', 'Oftalmologia');
 
 -- Tabela Paciente
 INSERT INTO Paciente (CpfPaciente, NomePac, DataNascimento, Genero, Telefone, Email) VALUES
@@ -85,7 +85,7 @@ INSERT INTO Medico (CodMed, NomeMed, Genero, Telefone, Email, Especialidade) VAL
 (2233445, 'Patricia Mendes', 'F', '(81) 96666-7777', 'patriciamendes@mail.com', 'Ortopedia'),
 (3344556, 'Carlos Eduardo', 'M', '(81) 95555-8888', 'carloseduardo@mail.com', 'Neurologia'),
 (4455667, 'Juliana Farias', 'F', '(81) 94444-9999', 'julianafarias@mail.com', 'Pediatria'),
-(5566889, 'Ricardo Moura', 'M', '(81) 93333-0000', 'ricardomorua@mail.com', 'Cardiologia'),
+(5566889, 'Ricardo Moura', 'M', '(81) 93333-0000', 'ricardomoura@mail.com', 'Cardiologia'),
 (6677990, 'Beatriz Souza', 'F', '(81) 92222-1111', 'beatrizsouza@mail.com', 'Dermatologia'),
 (7788001, 'André Lima', 'M', '(81) 91111-2222', 'andrelima@mail.com', 'Ortopedia'),
 (8899112, 'Camila Rocha', 'F', '(81) 90000-3333', 'camilarocha@mail.com', 'Clínico Geral'),
