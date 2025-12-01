@@ -65,13 +65,10 @@ INSERT INTO Consulta (CodCli, CodMed, CpfPaciente, Data_Hora) VALUES
 ('0000002', 8532974, '34512389765', '2025-12-10 16:40:00'),
 ('0000002', 9183424, '34512389765', '2026-01-05 10:30:00');
 
-
 -- Mais Clínicas
 INSERT INTO Clinica (CodCli, NomeCli, Endereco, Telefone, Email) VALUES
 ('0000003', 'Cardio Vida', 'Rua da Aurora, 295, Boa Vista', '(81) 3222-1010', 'contato@cardiovida.com'),
-('0000004', 'Derma Clin', 'Av. Conselheiro Aguiar, 1500, Boa Viagem', '(81) 3465-2020', 'agendamento@dermaclin.com');
--- Mais Clínicas
-INSERT INTO Clinica (CodCli, NomeCli, Endereco, Telefone, Email) VALUES
+('0000004', 'Derma Clin', 'Av. Conselheiro Aguiar, 1500, Boa Viagem', '(81) 3465-2020', 'agendamento@dermaclin.com'),
 ('0000005', 'OrtoMed Recife', 'Rua Benfica, 150, Madalena', '(81) 3227-3030', 'contato@ortomed.com'),
 ('0000006', 'NeuroCentro', 'Av. Boa Viagem, 3200, Boa Viagem', '(81) 3326-4040', 'agendamento@neurocentro.com'),
 ('0000007', 'Clínica da Família', 'Rua Imperial, 890, São José', '(81) 3423-5050', 'familia@clinica.com');
