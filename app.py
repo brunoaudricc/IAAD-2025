@@ -388,6 +388,7 @@ app.layout = dbc.Container([
                 dbc.NavLink([html.I(className="fas fa-user-md me-2"), "Médicos"], href="#", id="tab-medicos"),
                 dbc.NavLink([html.I(className="fas fa-users me-2"), "Pacientes"], href="#", id="tab-pacientes"),
                 dbc.NavLink([html.I(className="fas fa-calendar-check me-2"), "Consultas"], href="#", id="tab-consultas"),
+                dbc.NavLink([html.I(className="fas fa-clock me-2"), "Lista de Espera"], href="#", id="tab-lista-espera"),
             ], pills=True, className="mb-4", justified=True)
         ], lg=10, md=12)
     ], justify="center"),
@@ -410,34 +411,37 @@ app.layout = dbc.Container([
      Output('tab-clinicas', 'active'),
      Output('tab-medicos', 'active'),
      Output('tab-pacientes', 'active'),
-     Output('tab-consultas', 'active')],
+     Output('tab-consultas', 'active'),
+     Output('tab-lista-espera', 'active')],
     [Input('tab-home', 'n_clicks'),
      Input('tab-clinicas', 'n_clicks'),
      Input('tab-medicos', 'n_clicks'),
      Input('tab-pacientes', 'n_clicks'),
-     Input('tab-consultas', 'n_clicks')],
+     Input('tab-consultas', 'n_clicks'),
+     Input('tab-lista-espera', 'n_clicks')],
     prevent_initial_call=False
 )
-def update_active_tab(home_clicks, clinicas_clicks, medicos_clicks, pacientes_clicks, consultas_clicks):
+def update_active_tab(home_clicks, clinicas_clicks, medicos_clicks, pacientes_clicks, consultas_clicks, lista_espera_clicks):
     ctx = dash.callback_context
     if not ctx.triggered:
-        return 'home', True, False, False, False, False
+        return 'home', True, False, False, False, False, False
     
     button_id = ctx.triggered[0]['prop_id'].split('.')[0]
     
     tabs = {
-        'tab-home': ('home', [True, False, False, False, False]),
-        'tab-clinicas': ('clinicas', [False, True, False, False, False]),
-        'tab-medicos': ('medicos', [False, False, True, False, False]),
-        'tab-pacientes': ('pacientes', [False, False, False, True, False]),
-        'tab-consultas': ('consultas', [False, False, False, False, True])
+        'tab-home': ('home', [True, False, False, False, False, False]),
+        'tab-clinicas': ('clinicas', [False, True, False, False, False, False]),
+        'tab-medicos': ('medicos', [False, False, True, False, False, False]),
+        'tab-pacientes': ('pacientes', [False, False, False, True, False, False]),
+        'tab-consultas': ('consultas', [False, False, False, False, True, False]),
+        'tab-lista-espera': ('lista-espera', [False, False, False, False, False, True])
     }
     
     if button_id in tabs:
         tab_name, active_states = tabs[button_id]
         return tab_name, *active_states
     
-    return 'home', True, False, False, False, False
+    return 'home', True, False, False, False, False, False
 
 # Callback para renderizar conteúdo das abas
 @app.callback(
@@ -456,6 +460,8 @@ def render_tab_content(active_tab, refresh):
         return render_pacientes()
     elif active_tab == "consultas":
         return render_consultas()
+    elif active_tab == "lista-espera":
+        return render_lista_espera()
     return html.Div("Selecione uma aba")
 
 # ==================== HOME ====================
@@ -1557,6 +1563,268 @@ def delete_consulta(n_clicks, cod_cli, cod_med, cpf_pac, data_hora, current_refr
         if execute_update(query, (cod_cli, cod_med, cpf_pac, data_hora)):
             return dbc.Alert("Consulta excluída com sucesso!", color="success"), current_refresh + 1
         return dbc.Alert("Erro ao excluir consulta!", color="danger"), current_refresh
+    return "", current_refresh
+
+# ==================== LISTA DE ESPERA ====================
+def render_lista_espera():
+    # Buscar dados da lista de espera
+    lista_espera = execute_query("""
+        SELECT 
+            le.IdEspera,
+            c.NomeCli AS Clinica,
+            m.NomeMed AS Medico,
+            m.Especialidade,
+            p.NomePac AS Paciente,
+            le.DataHoraDesejada,
+            le.Prioridade,
+            le.Status,
+            le.DataHoraCadastro,
+            le.CodCli,
+            le.CodMed,
+            le.CpfPaciente
+        FROM ListaEspera le
+        JOIN Clinica c ON le.CodCli = c.CodCli
+        JOIN Medico m ON le.CodMed = m.CodMed
+        JOIN Paciente p ON le.CpfPaciente = p.CpfPaciente
+        WHERE le.Status = 'aguardando'
+        ORDER BY le.DataHoraDesejada, le.Prioridade DESC, le.DataHoraCadastro
+    """)
+    
+    # Buscar histórico de promoções
+    historico = execute_query("""
+        SELECT 
+            log.IdLog,
+            c.NomeCli AS Clinica,
+            m.NomeMed AS Medico,
+            p.NomePac AS Paciente,
+            log.DataHoraConsulta,
+            log.DataHoraPromocao,
+            log.Mensagem
+        FROM LogListaEspera log
+        JOIN Clinica c ON log.CodCli = c.CodCli
+        JOIN Medico m ON log.CodMed = m.CodMed
+        JOIN Paciente p ON log.CpfPaciente = p.CpfPaciente
+        ORDER BY log.DataHoraPromocao DESC
+        LIMIT 50
+    """)
+    
+    df_espera = pd.DataFrame(lista_espera) if lista_espera else pd.DataFrame()
+    df_historico = pd.DataFrame(historico) if historico else pd.DataFrame()
+    
+    # Buscar dados para dropdowns
+    clinicas = execute_query("SELECT CodCli, NomeCli FROM Clinica")
+    medicos = execute_query("SELECT CodMed, NomeMed, Especialidade FROM Medico")
+    pacientes = execute_query("SELECT CpfPaciente, NomePac FROM Paciente")
+    
+    # Preparar colunas para exibição (sem IDs internos)
+    colunas_exibir = ['Clinica', 'Medico', 'Especialidade', 'Paciente', 'DataHoraDesejada', 'Prioridade', 'Status', 'DataHoraCadastro']
+    df_exibir = df_espera[colunas_exibir] if not df_espera.empty else pd.DataFrame()
+    
+    return html.Div([
+        html.H3([
+            html.I(className="fas fa-clock me-3", style={'color': '#0ea5e9'}),
+            "Gestão de Lista de Espera"
+        ], className="mb-4"),
+        
+        dbc.Tabs(active_tab="tab-listar-espera", children=[
+            # Aba Listar
+            dbc.Tab(label="Aguardando", tab_id="tab-listar-espera", children=[
+                html.Div([
+                    dbc.Alert([
+                        html.I(className="fas fa-info-circle me-2"),
+                        "Pacientes em ordem de prioridade e data de cadastro. Quando uma consulta for cancelada, o próximo da fila será automaticamente agendado."
+                    ], color="info", className="mt-3"),
+                    dash_table.DataTable(
+                        id='table-lista-espera',
+                        columns=[{"name": i, "id": i} for i in df_exibir.columns] if not df_exibir.empty else [],
+                        data=df_exibir.to_dict('records') if not df_exibir.empty else [],
+                        style_table={'overflowX': 'auto'},
+                        style_cell={'textAlign': 'left', 'padding': '10px'},
+                        style_header={'backgroundColor': 'rgb(230, 230, 230)', 'fontWeight': 'bold'},
+                        style_data_conditional=[
+                            {
+                                'if': {'filter_query': '{Prioridade} > 1'},
+                                'backgroundColor': '#fef3c7',
+                                'fontWeight': 'bold'
+                            }
+                        ]
+                    )
+                ], className="mt-3")
+            ]),
+            
+            # Aba Adicionar à Lista
+            dbc.Tab(label="Adicionar à Espera", tab_id="tab-adicionar-espera", children=[
+                dbc.Form([
+                    dbc.Alert([
+                        html.I(className="fas fa-lightbulb me-2"),
+                        html.Strong("Prioridade: "),
+                        "0 = Normal, 1 = Média, 2 = Alta, 3+ = Urgente"
+                    ], color="warning", className="mt-3"),
+                    dbc.Row([
+                        dbc.Col([
+                            dbc.Label("Clínica"),
+                            dcc.Dropdown(
+                                id="espera-clinica",
+                                options=[{'label': c['NomeCli'], 'value': c['CodCli']} for c in clinicas] if clinicas else []
+                            )
+                        ], width=4),
+                        dbc.Col([
+                            dbc.Label("Médico"),
+                            dcc.Dropdown(
+                                id="espera-medico",
+                                options=[{'label': f"{m['NomeMed']} ({m['Especialidade']})", 'value': m['CodMed']} for m in medicos] if medicos else []
+                            )
+                        ], width=4),
+                        dbc.Col([
+                            dbc.Label("Paciente"),
+                            dcc.Dropdown(
+                                id="espera-paciente",
+                                options=[{'label': p['NomePac'], 'value': p['CpfPaciente']} for p in pacientes] if pacientes else []
+                            )
+                        ], width=4),
+                    ]),
+                    dbc.Row([
+                        dbc.Col([
+                            dbc.Label("Data Desejada"),
+                            dbc.Input(id="espera-data", type="date")
+                        ], width=4),
+                        dbc.Col([
+                            dbc.Label("Hora Desejada"),
+                            dbc.Input(id="espera-hora", type="time")
+                        ], width=4),
+                        dbc.Col([
+                            dbc.Label("Prioridade (0-5)"),
+                            dbc.Input(id="espera-prioridade", type="number", value=0, min=0, max=5)
+                        ], width=4),
+                    ], className="mt-3"),
+                    dbc.Button("Adicionar à Lista de Espera", id="btn-add-espera", color="primary", className="mt-3"),
+                    html.Div(id="msg-espera", className="mt-3")
+                ], className="mt-3")
+            ]),
+            
+            # Aba Cancelar da Lista
+            dbc.Tab(label="Cancelar Espera", tab_id="tab-cancelar-espera", children=[
+                dbc.Form([
+                    dbc.Row([
+                        dbc.Col([
+                            dbc.Label("ID da Espera"),
+                            dbc.Input(id="espera-delete-id", type="number", placeholder="Digite o ID")
+                        ], width=6),
+                        dbc.Col([
+                            dbc.Button("Buscar", id="btn-search-delete-espera", color="info", className="mt-4")
+                        ], width=2),
+                    ]),
+                    html.Hr(className="mt-3"),
+                    html.Div(id="espera-delete-info", children=[
+                        dbc.Alert("Digite um ID e clique em Buscar para visualizar os dados.", color="info")
+                    ]),
+                    dbc.Button("Confirmar Cancelamento", id="btn-delete-espera", color="danger", className="mt-3", disabled=True),
+                    html.Div(id="msg-delete-espera", className="mt-3")
+                ], className="mt-3")
+            ]),
+            
+            # Aba Histórico
+            dbc.Tab(label="Histórico de Promoções", tab_id="tab-historico-espera", children=[
+                html.Div([
+                    dbc.Alert([
+                        html.I(className="fas fa-history me-2"),
+                        "Histórico de pacientes que foram promovidos da lista de espera automaticamente pelo trigger."
+                    ], color="success", className="mt-3"),
+                    dash_table.DataTable(
+                        id='table-historico-espera',
+                        columns=[{"name": i, "id": i} for i in df_historico.columns] if not df_historico.empty else [],
+                        data=df_historico.to_dict('records') if not df_historico.empty else [],
+                        style_table={'overflowX': 'auto'},
+                        style_cell={'textAlign': 'left', 'padding': '10px'},
+                        style_header={'backgroundColor': 'rgb(230, 230, 230)', 'fontWeight': 'bold'}
+                    )
+                ], className="mt-3")
+            ]),
+        ])
+    ])
+
+# Callback: Adicionar à Lista de Espera
+@app.callback(
+    [Output("msg-espera", "children"),
+     Output("refresh-trigger", "data", allow_duplicate=True)],
+    Input("btn-add-espera", "n_clicks"),
+    [State("espera-clinica", "value"),
+     State("espera-medico", "value"),
+     State("espera-paciente", "value"),
+     State("espera-data", "value"),
+     State("espera-hora", "value"),
+     State("espera-prioridade", "value"),
+     State("refresh-trigger", "data")],
+    prevent_initial_call=True
+)
+def add_lista_espera(n_clicks, cod_cli, cod_med, cpf_pac, data, hora, prioridade, current_refresh):
+    if n_clicks and cod_cli and cod_med and cpf_pac and data and hora:
+        data_hora = f"{data} {hora}:00"
+        query = "INSERT INTO ListaEspera (CodCli, CodMed, CpfPaciente, DataHoraDesejada, Prioridade) VALUES (%s, %s, %s, %s, %s)"
+        if execute_update(query, (cod_cli, cod_med, cpf_pac, data_hora, prioridade or 0)):
+            return dbc.Alert("Paciente adicionado à lista de espera com sucesso!", color="success"), current_refresh + 1
+        return dbc.Alert("Erro ao adicionar à lista de espera!", color="danger"), current_refresh
+    return "", current_refresh
+
+# Callback: Buscar para Cancelar
+@app.callback(
+    [Output("espera-delete-info", "children"),
+     Output("btn-delete-espera", "disabled")],
+    Input("btn-search-delete-espera", "n_clicks"),
+    State("espera-delete-id", "value"),
+    prevent_initial_call=True
+)
+def search_delete_espera(n_clicks, id_espera):
+    if n_clicks and id_espera:
+        result = execute_query("""
+            SELECT 
+                le.IdEspera,
+                c.NomeCli AS Clinica,
+                m.NomeMed AS Medico,
+                m.Especialidade,
+                p.NomePac AS Paciente,
+                le.DataHoraDesejada,
+                le.Prioridade,
+                le.Status
+            FROM ListaEspera le
+            JOIN Clinica c ON le.CodCli = c.CodCli
+            JOIN Medico m ON le.CodMed = m.CodMed
+            JOIN Paciente p ON le.CpfPaciente = p.CpfPaciente
+            WHERE le.IdEspera = %s
+        """, (id_espera,))
+        if result:
+            e = result[0]
+            info = dbc.Card([
+                dbc.CardHeader("Dados da Lista de Espera a ser Cancelada", className="bg-danger text-white"),
+                dbc.CardBody([
+                    html.P([html.Strong("ID: "), str(e['IdEspera'])]),
+                    html.P([html.Strong("Clínica: "), e['Clinica']]),
+                    html.P([html.Strong("Médico: "), f"{e['Medico']} ({e['Especialidade']})"])    ,
+                    html.P([html.Strong("Paciente: "), e['Paciente']]),
+                    html.P([html.Strong("Data/Hora Desejada: "), str(e['DataHoraDesejada'])]),
+                    html.P([html.Strong("Prioridade: "), str(e['Prioridade'])]),
+                    html.P([html.Strong("Status: "), e['Status']]),
+                ])
+            ])
+            return info, False
+        return dbc.Alert(f"Registro {id_espera} não encontrado!", color="danger"), True
+    return dbc.Alert("Digite um ID e clique em Buscar.", color="info"), True
+
+# Callback: Confirmar Cancelamento
+@app.callback(
+    [Output("msg-delete-espera", "children"),
+     Output("refresh-trigger", "data", allow_duplicate=True)],
+    Input("btn-delete-espera", "n_clicks"),
+    [State("espera-delete-id", "value"),
+     State("refresh-trigger", "data")],
+    prevent_initial_call=True
+)
+def delete_espera(n_clicks, id_espera, current_refresh):
+    if n_clicks and id_espera:
+        query = "UPDATE ListaEspera SET Status = 'cancelado' WHERE IdEspera = %s"
+        if execute_update(query, (id_espera,)):
+            return dbc.Alert("Espera cancelada com sucesso!", color="success"), current_refresh + 1
+        return dbc.Alert("Erro ao cancelar espera!", color="danger"), current_refresh
     return "", current_refresh
 
 if __name__ == '__main__':
