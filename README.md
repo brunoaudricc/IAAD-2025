@@ -18,13 +18,23 @@ Sistema web desenvolvido em Python com Dash para gerenciamento de clínicas, mé
 ## 🔧 Instalação
 
 1. Crie um ambiente virtual:
+Windows
 ```powershell
 python -m venv .venv
 ```
+Linux ou IOS
+```powershell
+python3 -m venv .venv
+```
 
 2. Ative o ambiente virtual:
+Windows
 ```powershell
 .\.venv\Scripts\Activate
+```
+Linux ou IOS
+```powershell
+source .venv/bin/activate
 ```
 
 3. Instale as dependências:
@@ -51,13 +61,23 @@ password='sua_senha_aqui'  # ALTERAR COM SUA SENHA
 ## ▶️ Como Executar
 
 1. Ative o ambiente virtual (se ainda não estiver ativo):
+Windows
 ```powershell
 .\.venv\Scripts\Activate
 ```
+Linux ou IOS
+```powershell
+source .venv/bin/activate
+```
 
 2. Execute o aplicativo:
+Windows
 ```powershell
 python app.py
+```
+Linux ou IOS
+```powershell
+python3 app.py
 ```
 
 Abra o app no navegador com a seguinte URL`http://127.0.0.1:8050`
