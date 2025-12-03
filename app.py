@@ -401,7 +401,9 @@ app.layout = dbc.Container([
     ], justify="center"),
     
     dcc.Store(id='refresh-trigger', data=0),
-    dcc.Store(id='active-tab', data='home')
+    dcc.Store(id='active-tab', data='home'),
+    dcc.Store(id='consulta-edit-selected-data', data=None),
+    dcc.Store(id='consulta-delete-selected-data', data=None)
 ], fluid=True, className="px-4")
 
 # Callback para controlar navegação
@@ -1385,6 +1387,7 @@ def render_consultas():
                             dbc.Button("Buscar", id="btn-search-consulta", color="info", className="mt-3")
                         ], width=2),
                     ]),
+                    html.Div(id="consulta-edit-results", className="mt-3"),
                     html.Hr(className="mt-3"),
                     html.Div(id="consulta-edit-form", children=[
                         dbc.Row([
@@ -1428,6 +1431,7 @@ def render_consultas():
                             dbc.Button("Buscar", id="btn-search-delete-consulta", color="info", className="mt-3")
                         ], width=2),
                     ]),
+                    html.Div(id="consulta-delete-results", className="mt-3"),
                     html.Hr(className="mt-3"),
                     html.Div(id="consulta-delete-info", children=[
                         dbc.Alert("Digite a chave primária completa e clique em Buscar.", color="info")
@@ -1461,12 +1465,7 @@ def add_consulta(n_clicks, clinica, medico, paciente, data, hora, current_refres
     return "", current_refresh
 
 @app.callback(
-    [Output("consulta-edit-data", "value"),
-     Output("consulta-edit-hora", "value"),
-     Output("consulta-edit-data", "disabled"),
-     Output("consulta-edit-hora", "disabled"),
-     Output("btn-update-consulta", "disabled"),
-     Output("msg-edit-consulta", "children")],
+    Output("consulta-edit-results", "children"),
     Input("btn-search-consulta", "n_clicks"),
     [State("consulta-edit-codcli", "value"),
      State("consulta-edit-codmed", "value"),
@@ -1474,47 +1473,129 @@ def add_consulta(n_clicks, clinica, medico, paciente, data, hora, current_refres
      State("consulta-edit-datahora-antiga", "value")],
     prevent_initial_call=True
 )
-def search_consulta(n_clicks, cod_cli, cod_med, cpf_pac, data_hora_antiga):
-    if n_clicks and cod_cli and cod_med and cpf_pac and data_hora_antiga:
-        query = """SELECT * FROM Consulta 
-                   WHERE CodCli = %s AND CodMed = %s AND CpfPaciente = %s AND Data_Hora = %s"""
-        result = execute_query(query, (cod_cli, cod_med, cpf_pac, data_hora_antiga))
-        if result:
-            c = result[0]
-            data_hora_str = str(c['Data_Hora'])
-            data = data_hora_str.split(' ')[0]
-            hora = data_hora_str.split(' ')[1][:5]
-            return (data, hora, False, False, False,
-                   dbc.Alert("Consulta encontrada! Altere a data/hora desejada.", color="success"))
-        return ("", "", True, True, True,
-               dbc.Alert("Consulta não encontrada! Verifique a chave primária.", color="danger"))
-    return "", "", True, True, True, ""
+def search_consulta_list(n_clicks, cod_cli, cod_med, cpf_pac, data_hora_antiga):
+    if not n_clicks:
+        return ""
+    
+    # Check if at least one field is filled
+    if not any([cod_cli, cod_med, cpf_pac, data_hora_antiga]):
+        return dbc.Alert("Preencha pelo menos um campo para buscar.", color="warning")
+    
+    # Build dynamic query based on filled fields
+    query_parts = []
+    params = []
+    
+    if cod_cli:
+        query_parts.append("c.CodCli = %s")
+        params.append(cod_cli)
+    if cod_med:
+        query_parts.append("c.CodMed = %s")
+        params.append(cod_med)
+    if cpf_pac:
+        query_parts.append("c.CpfPaciente = %s")
+        params.append(cpf_pac)
+    if data_hora_antiga:
+        query_parts.append("c.Data_Hora = %s")
+        params.append(data_hora_antiga)
+    
+    where_clause = " AND ".join(query_parts)
+    
+    query = f"""SELECT c.*, cli.Nome as Clinica_Nome, m.Nome as Medico_Nome, p.Nome as Paciente_Nome
+                FROM Consulta c
+                JOIN Clinica cli ON c.CodCli = cli.CodCli
+                JOIN Medico m ON c.CodMed = m.CodMed
+                JOIN Paciente p ON c.CpfPaciente = p.CpfPaciente
+                WHERE {where_clause}
+                ORDER BY c.Data_Hora"""
+    
+    result = execute_query(query, tuple(params))
+    
+    if not result:
+        return dbc.Alert("Nenhuma consulta encontrada com os critérios informados.", color="warning")
+    
+    # Create radio options for selection
+    options = []
+    for c in result:
+        data_hora_str = str(c['Data_Hora'])
+        label = f"{c['Clinica_Nome']} | {c['Medico_Nome']} | {c['Paciente_Nome']} | {data_hora_str}"
+        value = f"{c['CodCli']}|{c['CodMed']}|{c['CpfPaciente']}|{data_hora_str}"
+        options.append({'label': label, 'value': value})
+    
+    return html.Div([
+        dbc.Alert(f"Encontradas {len(result)} consulta(s). Selecione uma para editar:", color="info"),
+        dcc.RadioItems(
+            id='consulta-edit-selector',
+            options=options,
+            labelStyle={'display': 'block', 'marginBottom': '10px'}
+        )
+    ])
+
+@app.callback(
+    [Output("consulta-edit-data", "value"),
+     Output("consulta-edit-hora", "value"),
+     Output("consulta-edit-data", "disabled"),
+     Output("consulta-edit-hora", "disabled"),
+     Output("btn-update-consulta", "disabled"),
+     Output("msg-edit-consulta", "children"),
+     Output("consulta-edit-selected-data", "data")],
+    Input("consulta-edit-selector", "value"),
+    prevent_initial_call=True
+)
+def select_consulta_for_edit(selected_value):
+    if not selected_value:
+        return "", "", True, True, True, "", None
+    
+    # Parse the selected value
+    parts = selected_value.split('|')
+    cod_cli, cod_med, cpf_pac, data_hora_antiga = parts
+    
+    # Fetch the specific consultation
+    query = """SELECT * FROM Consulta 
+               WHERE CodCli = %s AND CodMed = %s AND CpfPaciente = %s AND Data_Hora = %s"""
+    result = execute_query(query, (cod_cli, cod_med, cpf_pac, data_hora_antiga))
+    
+    if result:
+        c = result[0]
+        data_hora_str = str(c['Data_Hora'])
+        data = data_hora_str.split(' ')[0]
+        hora = data_hora_str.split(' ')[1][:5]
+        
+        # Store the original data
+        stored_data = {
+            'CodCli': cod_cli,
+            'CodMed': cod_med,
+            'CpfPaciente': cpf_pac,
+            'Data_Hora': data_hora_antiga
+        }
+        
+        return (data, hora, False, False, False,
+               dbc.Alert("Consulta selecionada! Altere a data/hora desejada.", color="success"),
+               stored_data)
+    
+    return "", "", True, True, True, dbc.Alert("Erro ao carregar consulta.", color="danger"), None
 
 @app.callback(
     [Output("msg-edit-consulta", "children", allow_duplicate=True),
      Output("refresh-trigger", "data", allow_duplicate=True)],
     Input("btn-update-consulta", "n_clicks"),
-    [State("consulta-edit-codcli", "value"),
-     State("consulta-edit-codmed", "value"),
-     State("consulta-edit-cpfpac", "value"),
-     State("consulta-edit-datahora-antiga", "value"),
+    [State("consulta-edit-selected-data", "data"),
      State("consulta-edit-data", "value"),
      State("consulta-edit-hora", "value"),
      State("refresh-trigger", "data")],
     prevent_initial_call=True
 )
-def update_consulta(n_clicks, cod_cli, cod_med, cpf_pac, data_hora_antiga, nova_data, nova_hora, current_refresh):
-    if n_clicks and cod_cli and cod_med and cpf_pac and data_hora_antiga and nova_data and nova_hora:
+def update_consulta(n_clicks, selected_data, nova_data, nova_hora, current_refresh):
+    if n_clicks and selected_data and nova_data and nova_hora:
         nova_data_hora = f"{nova_data} {nova_hora}:00"
         query = "UPDATE Consulta SET Data_Hora = %s WHERE CodCli = %s AND CodMed = %s AND CpfPaciente = %s AND Data_Hora = %s"
-        if execute_update(query, (nova_data_hora, cod_cli, cod_med, cpf_pac, data_hora_antiga)):
+        if execute_update(query, (nova_data_hora, selected_data['CodCli'], selected_data['CodMed'], 
+                                  selected_data['CpfPaciente'], selected_data['Data_Hora'])):
             return dbc.Alert("Consulta atualizada com sucesso!", color="success"), current_refresh + 1
         return dbc.Alert("Erro ao atualizar consulta!", color="danger"), current_refresh
     return "", current_refresh
 
 @app.callback(
-    [Output("consulta-delete-info", "children"),
-     Output("btn-delete-consulta", "disabled")],
+    Output("consulta-delete-results", "children"),
     Input("btn-search-delete-consulta", "n_clicks"),
     [State("consulta-delete-codcli", "value"),
      State("consulta-delete-codmed", "value"),
@@ -1522,45 +1603,124 @@ def update_consulta(n_clicks, cod_cli, cod_med, cpf_pac, data_hora_antiga, nova_
      State("consulta-delete-datahora", "value")],
     prevent_initial_call=True
 )
-def search_delete_consulta(n_clicks, cod_cli, cod_med, cpf_pac, data_hora):
-    if n_clicks and cod_cli and cod_med and cpf_pac and data_hora:
-        query = """SELECT c.*, cl.NomeCli, m.NomeMed, p.NomePac
-                   FROM Consulta c
-                   JOIN Clinica cl ON c.CodCli = cl.CodCli
-                   JOIN Medico m ON c.CodMed = m.CodMed
-                   JOIN Paciente p ON c.CpfPaciente = p.CpfPaciente
-                   WHERE c.CodCli = %s AND c.CodMed = %s AND c.CpfPaciente = %s AND c.Data_Hora = %s"""
-        result = execute_query(query, (cod_cli, cod_med, cpf_pac, data_hora))
-        if result:
-            c = result[0]
-            info = dbc.Card([
-                dbc.CardHeader("Dados da Consulta a ser Excluída", className="bg-danger text-white"),
-                dbc.CardBody([
-                    html.P([html.Strong("Clínica: "), f"{c['CodCli']} - {c['NomeCli']}"]),
-                    html.P([html.Strong("Médico: "), f"{c['CodMed']} - {c['NomeMed']}"]),
-                    html.P([html.Strong("Paciente: "), f"{c['CpfPaciente']} - {c['NomePac']}"]),
-                    html.P([html.Strong("Data/Hora: "), str(c['Data_Hora'])]),
-                ])
+def search_delete_consulta_list(n_clicks, cod_cli, cod_med, cpf_pac, data_hora):
+    if not n_clicks:
+        return ""
+    
+    # Check if at least one field is filled
+    if not any([cod_cli, cod_med, cpf_pac, data_hora]):
+        return dbc.Alert("Preencha pelo menos um campo para buscar.", color="warning")
+    
+    # Build dynamic query based on filled fields
+    query_parts = []
+    params = []
+    
+    if cod_cli:
+        query_parts.append("c.CodCli = %s")
+        params.append(cod_cli)
+    if cod_med:
+        query_parts.append("c.CodMed = %s")
+        params.append(cod_med)
+    if cpf_pac:
+        query_parts.append("c.CpfPaciente = %s")
+        params.append(cpf_pac)
+    if data_hora:
+        query_parts.append("c.Data_Hora = %s")
+        params.append(data_hora)
+    
+    where_clause = " AND ".join(query_parts)
+    
+    query = f"""SELECT c.*, cl.NomeCli, m.NomeMed, p.NomePac
+                FROM Consulta c
+                JOIN Clinica cl ON c.CodCli = cl.CodCli
+                JOIN Medico m ON c.CodMed = m.CodMed
+                JOIN Paciente p ON c.CpfPaciente = p.CpfPaciente
+                WHERE {where_clause}
+                ORDER BY c.Data_Hora"""
+    
+    result = execute_query(query, tuple(params))
+    
+    if not result:
+        return dbc.Alert("Nenhuma consulta encontrada com os critérios informados.", color="warning")
+    
+    # Create radio options for selection
+    options = []
+    for c in result:
+        data_hora_str = str(c['Data_Hora'])
+        label = f"{c['NomeCli']} | {c['NomeMed']} | {c['NomePac']} | {data_hora_str}"
+        value = f"{c['CodCli']}|{c['CodMed']}|{c['CpfPaciente']}|{data_hora_str}"
+        options.append({'label': label, 'value': value})
+    
+    return html.Div([
+        dbc.Alert(f"Encontradas {len(result)} consulta(s). Selecione uma para excluir:", color="info"),
+        dcc.RadioItems(
+            id='consulta-delete-selector',
+            options=options,
+            labelStyle={'display': 'block', 'marginBottom': '10px'}
+        )
+    ])
+
+@app.callback(
+    [Output("consulta-delete-info", "children"),
+     Output("btn-delete-consulta", "disabled"),
+     Output("consulta-delete-selected-data", "data")],
+    Input("consulta-delete-selector", "value"),
+    prevent_initial_call=True
+)
+def select_consulta_for_delete(selected_value):
+    if not selected_value:
+        return dbc.Alert("Digite a chave primária completa e clique em Buscar.", color="info"), True, None
+    
+    # Parse the selected value
+    parts = selected_value.split('|')
+    cod_cli, cod_med, cpf_pac, data_hora = parts
+    
+    # Fetch the specific consultation
+    query = """SELECT c.*, cl.NomeCli, m.NomeMed, p.NomePac
+               FROM Consulta c
+               JOIN Clinica cl ON c.CodCli = cl.CodCli
+               JOIN Medico m ON c.CodMed = m.CodMed
+               JOIN Paciente p ON c.CpfPaciente = p.CpfPaciente
+               WHERE c.CodCli = %s AND c.CodMed = %s AND c.CpfPaciente = %s AND c.Data_Hora = %s"""
+    result = execute_query(query, (cod_cli, cod_med, cpf_pac, data_hora))
+    
+    if result:
+        c = result[0]
+        info = dbc.Card([
+            dbc.CardHeader("Dados da Consulta a ser Excluída", className="bg-danger text-white"),
+            dbc.CardBody([
+                html.P([html.Strong("Clínica: "), f"{c['CodCli']} - {c['NomeCli']}"]),
+                html.P([html.Strong("Médico: "), f"{c['CodMed']} - {c['NomeMed']}"]),
+                html.P([html.Strong("Paciente: "), f"{c['CpfPaciente']} - {c['NomePac']}"]),
+                html.P([html.Strong("Data/Hora: "), str(c['Data_Hora'])]),
             ])
-            return info, False
-        return dbc.Alert("Consulta não encontrada! Verifique a chave primária.", color="danger"), True
-    return dbc.Alert("Digite a chave primária completa e clique em Buscar.", color="info"), True
+        ])
+        
+        # Store the selected data
+        stored_data = {
+            'CodCli': cod_cli,
+            'CodMed': cod_med,
+            'CpfPaciente': cpf_pac,
+            'Data_Hora': data_hora
+        }
+        
+        return info, False, stored_data
+    
+    return dbc.Alert("Erro ao carregar consulta.", color="danger"), True, None
 
 @app.callback(
     [Output("msg-delete-consulta", "children"),
      Output("refresh-trigger", "data", allow_duplicate=True)],
     Input("btn-delete-consulta", "n_clicks"),
-    [State("consulta-delete-codcli", "value"),
-     State("consulta-delete-codmed", "value"),
-     State("consulta-delete-cpfpac", "value"),
-     State("consulta-delete-datahora", "value"),
+    [State("consulta-delete-selected-data", "data"),
      State("refresh-trigger", "data")],
     prevent_initial_call=True
 )
-def delete_consulta(n_clicks, cod_cli, cod_med, cpf_pac, data_hora, current_refresh):
-    if n_clicks and cod_cli and cod_med and cpf_pac and data_hora:
+def delete_consulta(n_clicks, selected_data, current_refresh):
+    if n_clicks and selected_data:
         query = "DELETE FROM Consulta WHERE CodCli = %s AND CodMed = %s AND CpfPaciente = %s AND Data_Hora = %s"
-        if execute_update(query, (cod_cli, cod_med, cpf_pac, data_hora)):
+        if execute_update(query, (selected_data['CodCli'], selected_data['CodMed'], 
+                                  selected_data['CpfPaciente'], selected_data['Data_Hora'])):
             return dbc.Alert("Consulta excluída com sucesso!", color="success"), current_refresh + 1
         return dbc.Alert("Erro ao excluir consulta!", color="danger"), current_refresh
     return "", current_refresh
