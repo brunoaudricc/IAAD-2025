@@ -5,6 +5,8 @@ import mysql.connector
 from mysql.connector import Error
 import pandas as pd
 from datetime import datetime
+import plotly.graph_objects as go
+import plotly.express as px
 
 # Inicializar app Dash
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP], suppress_callback_exceptions=True)
@@ -389,8 +391,9 @@ app.layout = dbc.Container([
                 dbc.NavLink([html.I(className="fas fa-users me-2"), "Pacientes"], href="#", id="tab-pacientes"),
                 dbc.NavLink([html.I(className="fas fa-calendar-check me-2"), "Consultas"], href="#", id="tab-consultas"),
                 dbc.NavLink([html.I(className="fas fa-clock me-2"), "Lista de Espera"], href="#", id="tab-lista-espera"),
+                dbc.NavLink([html.I(className="fas fa-chart-pie me-2"), "Gráficos"], href="#", id="tab-graficos"),
             ], pills=True, className="mb-4", justified=True)
-        ], lg=10, md=12)
+        ], lg=11, md=12)
     ], justify="center"),
     
     # Conteúdo centralizado
@@ -414,36 +417,39 @@ app.layout = dbc.Container([
      Output('tab-medicos', 'active'),
      Output('tab-pacientes', 'active'),
      Output('tab-consultas', 'active'),
-     Output('tab-lista-espera', 'active')],
+     Output('tab-lista-espera', 'active'),
+     Output('tab-graficos', 'active')],
     [Input('tab-home', 'n_clicks'),
      Input('tab-clinicas', 'n_clicks'),
      Input('tab-medicos', 'n_clicks'),
      Input('tab-pacientes', 'n_clicks'),
      Input('tab-consultas', 'n_clicks'),
-     Input('tab-lista-espera', 'n_clicks')],
+     Input('tab-lista-espera', 'n_clicks'),
+     Input('tab-graficos', 'n_clicks')],
     prevent_initial_call=False
 )
-def update_active_tab(home_clicks, clinicas_clicks, medicos_clicks, pacientes_clicks, consultas_clicks, lista_espera_clicks):
+def update_active_tab(home_clicks, clinicas_clicks, medicos_clicks, pacientes_clicks, consultas_clicks, lista_espera_clicks, graficos_clicks):
     ctx = dash.callback_context
     if not ctx.triggered:
-        return 'home', True, False, False, False, False, False
+        return 'home', True, False, False, False, False, False, False
     
     button_id = ctx.triggered[0]['prop_id'].split('.')[0]
     
     tabs = {
-        'tab-home': ('home', [True, False, False, False, False, False]),
-        'tab-clinicas': ('clinicas', [False, True, False, False, False, False]),
-        'tab-medicos': ('medicos', [False, False, True, False, False, False]),
-        'tab-pacientes': ('pacientes', [False, False, False, True, False, False]),
-        'tab-consultas': ('consultas', [False, False, False, False, True, False]),
-        'tab-lista-espera': ('lista-espera', [False, False, False, False, False, True])
+        'tab-home': ('home', [True, False, False, False, False, False, False]),
+        'tab-clinicas': ('clinicas', [False, True, False, False, False, False, False]),
+        'tab-medicos': ('medicos', [False, False, True, False, False, False, False]),
+        'tab-pacientes': ('pacientes', [False, False, False, True, False, False, False]),
+        'tab-consultas': ('consultas', [False, False, False, False, True, False, False]),
+        'tab-lista-espera': ('lista-espera', [False, False, False, False, False, True, False]),
+        'tab-graficos': ('graficos', [False, False, False, False, False, False, True])
     }
     
     if button_id in tabs:
         tab_name, active_states = tabs[button_id]
         return tab_name, *active_states
     
-    return 'home', True, False, False, False, False, False
+    return 'home', True, False, False, False, False, False, False
 
 # Callback para renderizar conteúdo das abas
 @app.callback(
@@ -464,6 +470,8 @@ def render_tab_content(active_tab, refresh):
         return render_consultas()
     elif active_tab == "lista-espera":
         return render_lista_espera()
+    elif active_tab == "graficos":
+        return render_graficos()
     return html.Div("Selecione uma aba")
 
 # ==================== HOME ====================
@@ -1986,6 +1994,293 @@ def delete_espera(n_clicks, id_espera, current_refresh):
             return dbc.Alert("Espera cancelada com sucesso!", color="success"), current_refresh + 1
         return dbc.Alert("Erro ao cancelar espera!", color="danger"), current_refresh
     return "", current_refresh
+
+# ==================== GRÁFICOS ====================
+def render_graficos():
+    return html.Div([
+        html.H3([
+            html.I(className="fas fa-chart-pie me-3", style={'color': '#0ea5e9'}),
+            "Visualizações e Análises"
+        ], className="mb-4"),
+        
+        dbc.Alert([
+            html.I(className="fas fa-info-circle me-2"),
+            "Análises visuais e estatísticas do sistema de gestão clínica."
+        ], color="info", className="mb-4"),
+        
+        # Linha 1: Consultas por Especialidade + Lista de Espera vs Consultas
+        dbc.Row([
+            dbc.Col([
+                dbc.Card([
+                    dbc.CardBody([
+                        html.H5("Consultas por Especialidade", className="text-center mb-3"),
+                        dcc.Graph(id='graph-especialidade')
+                    ])
+                ], className="shadow-sm")
+            ], lg=6, md=12, className="mb-4"),
+            
+            dbc.Col([
+                dbc.Card([
+                    dbc.CardBody([
+                        html.H5("Lista de Espera vs Consultas Agendadas", className="text-center mb-3"),
+                        dcc.Graph(id='graph-lista-espera')
+                    ])
+                ], className="shadow-sm")
+            ], lg=6, md=12, className="mb-4"),
+        ]),
+        
+        # Linha 2: Consultas por Clínica + Crescimento de Consultas
+        dbc.Row([
+            dbc.Col([
+                dbc.Card([
+                    dbc.CardBody([
+                        html.H5("Consultas por Clínica", className="text-center mb-3"),
+                        dcc.Graph(id='graph-clinica')
+                    ])
+                ], className="shadow-sm")
+            ], lg=6, md=12, className="mb-4"),
+            
+            dbc.Col([
+                dbc.Card([
+                    dbc.CardBody([
+                        html.H5("Crescimento de Consultas (Últimos 6 Meses)", className="text-center mb-3"),
+                        dcc.Graph(id='graph-crescimento')
+                    ])
+                ], className="shadow-sm")
+            ], lg=6, md=12, className="mb-4"),
+        ]),
+        
+        # Linha 3: Top 10 Médicos + Distribuição de Gênero (Médicos e Pacientes)
+        dbc.Row([
+            dbc.Col([
+                dbc.Card([
+                    dbc.CardBody([
+                        html.H5("Top 10 Médicos Mais Procurados", className="text-center mb-3"),
+                        dcc.Graph(id='graph-top-medicos')
+                    ])
+                ], className="shadow-sm")
+            ], lg=6, md=12, className="mb-4"),
+            
+            dbc.Col([
+                dbc.Card([
+                    dbc.CardBody([
+                        html.H5("Distribuição de Gênero - Médicos", className="text-center mb-3"),
+                        dcc.Graph(id='graph-genero-medicos')
+                    ])
+                ], className="shadow-sm")
+            ], lg=3, md=6, className="mb-4"),
+            
+            dbc.Col([
+                dbc.Card([
+                    dbc.CardBody([
+                        html.H5("Distribuição de Gênero - Pacientes", className="text-center mb-3"),
+                        dcc.Graph(id='graph-genero-pacientes')
+                    ])
+                ], className="shadow-sm")
+            ], lg=3, md=6, className="mb-4"),
+        ]),
+        
+        dcc.Interval(id='interval-graficos', interval=30000, n_intervals=0)
+    ])
+
+@app.callback(
+    [Output('graph-especialidade', 'figure'),
+     Output('graph-lista-espera', 'figure'),
+     Output('graph-clinica', 'figure'),
+     Output('graph-crescimento', 'figure'),
+     Output('graph-top-medicos', 'figure'),
+     Output('graph-genero-medicos', 'figure'),
+     Output('graph-genero-pacientes', 'figure')],
+    [Input('interval-graficos', 'n_intervals'),
+     Input('refresh-trigger', 'data')]
+)
+def update_graficos(n, refresh):
+    # 1. Consultas por Especialidade
+    data_especialidade = execute_query("""
+        SELECT m.Especialidade, COUNT(*) as Total
+        FROM Consulta c
+        JOIN Medico m ON c.CodMed = m.CodMed
+        GROUP BY m.Especialidade
+        ORDER BY Total DESC
+    """)
+    
+    if data_especialidade:
+        df_esp = pd.DataFrame(data_especialidade)
+        fig_esp = px.pie(df_esp, names='Especialidade', values='Total', 
+                         hole=0.4, color_discrete_sequence=px.colors.qualitative.Set3)
+        fig_esp.update_traces(textposition='inside', textinfo='percent+label')
+        fig_esp.update_layout(showlegend=False, margin=dict(t=0, b=0, l=0, r=0))
+    else:
+        fig_esp = go.Figure()
+        fig_esp.add_annotation(text="Sem dados", showarrow=False)
+    
+    # 2. Lista de Espera vs Consultas Agendadas
+    data_lista = execute_query("""
+        SELECT m.Especialidade,
+               COUNT(DISTINCT c.CodMed, c.CpfPaciente, c.Data_Hora) as Consultas,
+               COUNT(DISTINCT le.IdEspera) as ListaEspera
+        FROM Medico m
+        LEFT JOIN Consulta c ON m.CodMed = c.CodMed
+        LEFT JOIN ListaEspera le ON m.CodMed = le.CodMed AND le.Status = 'aguardando'
+        GROUP BY m.Especialidade
+        ORDER BY Consultas DESC
+    """)
+    
+    if data_lista:
+        df_lista = pd.DataFrame(data_lista)
+        fig_lista = go.Figure()
+        fig_lista.add_trace(go.Bar(
+            name='Consultas Agendadas',
+            x=df_lista['Especialidade'],
+            y=df_lista['Consultas'],
+            marker_color='#3b82f6'
+        ))
+        fig_lista.add_trace(go.Bar(
+            name='Lista de Espera',
+            x=df_lista['Especialidade'],
+            y=df_lista['ListaEspera'],
+            marker_color='#f59e0b'
+        ))
+        fig_lista.update_layout(barmode='stack', xaxis_title='', yaxis_title='Quantidade',
+                               legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),
+                               margin=dict(t=30, b=0, l=0, r=0))
+    else:
+        fig_lista = go.Figure()
+        fig_lista.add_annotation(text="Sem dados", showarrow=False)
+    
+    # 3. Consultas por Clínica
+    data_clinica = execute_query("""
+        SELECT cl.NomeCli as Clinica, COUNT(*) as Total
+        FROM Consulta c
+        JOIN Clinica cl ON c.CodCli = cl.CodCli
+        GROUP BY cl.NomeCli
+        ORDER BY Total DESC
+    """)
+    
+    if data_clinica:
+        df_cli = pd.DataFrame(data_clinica)
+        fig_cli = px.bar(df_cli, x='Clinica', y='Total', color_discrete_sequence=['#10b981'])
+        fig_cli.update_layout(xaxis_title='', yaxis_title='Consultas', showlegend=False,
+                             margin=dict(t=0, b=0, l=0, r=0))
+        fig_cli.update_traces(text=df_cli['Total'], textposition='outside')
+    else:
+        fig_cli = go.Figure()
+        fig_cli.add_annotation(text="Sem dados", showarrow=False)
+    
+    # 4. Crescimento de Consultas (Últimos 6 meses)
+    data_crescimento = execute_query("""
+        SELECT DATE_FORMAT(Data_Hora, '%Y-%m') as Mes, COUNT(*) as Total
+        FROM Consulta
+        WHERE Data_Hora >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
+        GROUP BY Mes
+        ORDER BY Mes
+    """)
+    
+    if data_crescimento:
+        df_cresc = pd.DataFrame(data_crescimento)
+        fig_cresc = px.area(df_cresc, x='Mes', y='Total', color_discrete_sequence=['#8b5cf6'])
+        fig_cresc.update_layout(xaxis_title='Mês', yaxis_title='Consultas',
+                               margin=dict(t=0, b=0, l=0, r=0))
+        fig_cresc.update_traces(hovertemplate='Mês: %{x}<br>Consultas: %{y}<extra></extra>')
+    else:
+        fig_cresc = go.Figure()
+        fig_cresc.add_annotation(text="Sem dados", showarrow=False)
+    
+    # 5. Top 10 Médicos Mais Procurados
+    data_top_medicos = execute_query("""
+        SELECT m.NomeMed as Medico, m.Especialidade, COUNT(*) as Total
+        FROM Consulta c
+        JOIN Medico m ON c.CodMed = m.CodMed
+        GROUP BY m.CodMed, m.NomeMed, m.Especialidade
+        ORDER BY Total DESC
+        LIMIT 10
+    """)
+    
+    if data_top_medicos:
+        df_top = pd.DataFrame(data_top_medicos)
+        fig_top = px.bar(df_top, y='Medico', x='Total', orientation='h',
+                        color_discrete_sequence=['#06b6d4'],
+                        hover_data={'Total': True, 'Especialidade': True, 'Medico': False})
+        fig_top.update_layout(yaxis_title='', xaxis_title='Consultas', showlegend=False,
+                             margin=dict(t=0, b=0, l=0, r=0))
+        fig_top.update_traces(text=df_top['Total'], textposition='outside', texttemplate='%{text:.0f}')
+        fig_top.update_yaxes(categoryorder='total ascending')
+        fig_top.update_xaxes(tickformat='d', dtick=1)
+    else:
+        fig_top = go.Figure()
+        fig_top.add_annotation(text="Sem dados", showarrow=False)
+    
+    # 6. Distribuição de Gênero - Médicos
+    data_genero_med = execute_query("""
+        SELECT 
+            CASE 
+                WHEN Genero = 'M' THEN 'Masculino'
+                WHEN Genero = 'F' THEN 'Feminino'
+                WHEN Genero IS NULL OR Genero = '' THEN 'Não informado'
+                ELSE Genero
+            END as Genero,
+            COUNT(*) as Total
+        FROM Medico
+        GROUP BY Genero
+    """)
+    
+    if data_genero_med:
+        df_gen_med = pd.DataFrame(data_genero_med)
+        color_map = {'Masculino': '#10b981', 'Feminino': '#f59e0b', 'Não informado': '#94a3b8'}
+        cores = [color_map.get(g, '#94a3b8') for g in df_gen_med['Genero']]
+        
+        fig_gen_med = go.Figure(data=[go.Pie(
+            labels=df_gen_med['Genero'],
+            values=df_gen_med['Total'],
+            marker=dict(colors=cores),
+            textinfo='percent+label',
+            textposition='inside'
+        )])
+        fig_gen_med.update_layout(
+            showlegend=True,
+            legend=dict(orientation='h', yanchor='top', y=-0.1, xanchor='center', x=0.5),
+            margin=dict(t=0, b=40, l=0, r=0)
+        )
+    else:
+        fig_gen_med = go.Figure()
+        fig_gen_med.add_annotation(text="Sem dados", showarrow=False)
+    
+    # 7. Distribuição de Gênero - Pacientes
+    data_genero_pac = execute_query("""
+        SELECT 
+            CASE 
+                WHEN Genero = 'M' THEN 'Masculino'
+                WHEN Genero = 'F' THEN 'Feminino'
+                WHEN Genero IS NULL OR Genero = '' THEN 'Não informado'
+                ELSE Genero
+            END as Genero,
+            COUNT(*) as Total
+        FROM Paciente
+        GROUP BY Genero
+    """)
+    
+    if data_genero_pac:
+        df_gen_pac = pd.DataFrame(data_genero_pac)
+        color_map = {'Masculino': '#10b981', 'Feminino': '#f59e0b', 'Não informado': '#94a3b8'}
+        cores = [color_map.get(g, '#94a3b8') for g in df_gen_pac['Genero']]
+        
+        fig_gen_pac = go.Figure(data=[go.Pie(
+            labels=df_gen_pac['Genero'],
+            values=df_gen_pac['Total'],
+            marker=dict(colors=cores),
+            textinfo='percent+label',
+            textposition='inside'
+        )])
+        fig_gen_pac.update_layout(
+            showlegend=True,
+            legend=dict(orientation='h', yanchor='top', y=-0.1, xanchor='center', x=0.5),
+            margin=dict(t=0, b=40, l=0, r=0)
+        )
+    else:
+        fig_gen_pac = go.Figure()
+        fig_gen_pac.add_annotation(text="Sem dados", showarrow=False)
+    
+    return fig_esp, fig_lista, fig_cli, fig_cresc, fig_top, fig_gen_med, fig_gen_pac
 
 if __name__ == '__main__':
     app.run(debug=True)
