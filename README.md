@@ -18,21 +18,21 @@ Sistema web desenvolvido em Python com Dash para gerenciamento de clínicas, mé
 ## 🔧 Instalação
 
 1. Crie um ambiente virtual:
-Windows
+- Windows
 ```powershell
 python -m venv .venv
 ```
-Linux ou IOS
+- Linux ou IOS
 ```powershell
 python3 -m venv .venv
 ```
 
 2. Ative o ambiente virtual:
-Windows
+- Windows
 ```powershell
 .\.venv\Scripts\Activate
 ```
-Linux ou IOS
+- Linux ou IOS
 ```powershell
 source .venv/bin/activate
 ```
@@ -42,7 +42,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-4. Configure a senha do MySQL no arquivo `app.py` (linha 18):
+4. Configure a senha do MySQL no arquivo `app.py` (linha 319):
 ```python
 password='sua_senha_aqui'  # ALTERAR COM SUA SENHA
 ```
@@ -61,21 +61,21 @@ password='sua_senha_aqui'  # ALTERAR COM SUA SENHA
 ## ▶️ Como Executar
 
 1. Ative o ambiente virtual (se ainda não estiver ativo):
-Windows
+- Windows
 ```powershell
 .\.venv\Scripts\Activate
 ```
-Linux ou IOS
+- Linux ou IOS
 ```powershell
 source .venv/bin/activate
 ```
 
 2. Execute o aplicativo:
-Windows
+- Windows
 ```powershell
 python app.py
 ```
-Linux ou IOS
+- Linux ou IOS
 ```powershell
 python3 app.py
 ```
