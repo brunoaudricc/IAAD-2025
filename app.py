@@ -708,7 +708,7 @@ def add_clinica(n_clicks, cod, nome, endereco, telefone, email, current_refresh)
         query = "INSERT INTO Clinica (CodCli, NomeCli, Endereco, Telefone, Email) VALUES (%s, %s, %s, %s, %s)"
         if execute_update(query, (cod, nome, endereco, telefone, email)):
             return dbc.Alert("Clínica cadastrada com sucesso!", color="success"), current_refresh + 1
-        return dbc.Alert("Erro ao cadastrar clínica!", color="danger"), current_refresh
+        return dbc.Alert("Erro ao cadastrar clínica! Código pode já existir.", color="danger"), dash.no_update
     return "", current_refresh
 
 @app.callback(
@@ -1105,7 +1105,7 @@ def add_medico(n_clicks, cod, nome, genero, telefone, email, especialidade, curr
         query = "INSERT INTO Medico (CodMed, NomeMed, Genero, Telefone, Email, Especialidade) VALUES (%s, %s, %s, %s, %s, %s)"
         if execute_update(query, (cod, nome, genero, telefone, email, especialidade)):
             return dbc.Alert("Médico cadastrado com sucesso!", color="success"), current_refresh + 1
-        return dbc.Alert("Erro ao cadastrar médico!", color="danger"), current_refresh
+        return dbc.Alert("Erro ao cadastrar médico! Código pode já existir.", color="danger"), dash.no_update
     return "", current_refresh
 
 @app.callback(
@@ -1518,7 +1518,7 @@ def add_paciente(n_clicks, cpf, nome, data_nasc, genero, telefone, email, curren
         query = "INSERT INTO Paciente (CpfPaciente, NomePac, DataNascimento, Genero, Telefone, Email) VALUES (%s, %s, %s, %s, %s, %s)"
         if execute_update(query, (cpf, nome, data_nasc, genero, telefone, email)):
             return dbc.Alert("Paciente cadastrado com sucesso!", color="success"), current_refresh + 1
-        return dbc.Alert("Erro ao cadastrar paciente!", color="danger"), current_refresh
+        return dbc.Alert("Erro ao cadastrar paciente! CPF pode já existir.", color="danger"), dash.no_update
     return "", current_refresh
 
 @app.callback(
