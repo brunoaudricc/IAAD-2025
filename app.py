@@ -7,6 +7,7 @@ import pandas as pd
 from datetime import datetime
 import plotly.graph_objects as go
 import plotly.express as px
+from config import DB_CONFIG
 
 # Inicializar app Dash
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP], suppress_callback_exceptions=True)
@@ -314,12 +315,7 @@ app.index_string = '''
 # Função de conexão com o banco de dados
 def create_connection():
     try:
-        connection = mysql.connector.connect(
-            host='localhost',
-            database='GestaoClinica',
-            user='root',
-            password='sua_senha_aqui'  # ALTERAR COM SUA SENHA
-        )
+        connection = mysql.connector.connect(**DB_CONFIG)
         if connection.is_connected():
             return connection
     except Error as e:

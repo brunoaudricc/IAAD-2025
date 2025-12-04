@@ -1,133 +1,262 @@
 # Sistema de Gestão de Consultas Médicas
 
-Sistema web desenvolvido em Python com Dash para gerenciamento de clínicas, médicos, pacientes e consultas médicas.
+Sistema web desenvolvido em Python com Dash para gerenciamento completo de clínicas, médicos, pacientes, consultas médicas e lista de espera, com dashboard analítico e visualizações interativas.
 
 ## 🚀 Tecnologias
 
 - Python 3.x
 - Dash & Dash Bootstrap Components
-- MySQL
+- MySQL 8.0
 - Pandas
+- Plotly (visualizações de dados)
+- Font Awesome (ícones)
 
 ## 📋 Pré-requisitos
 
 - Python 3.8 ou superior
 - MySQL Server 8.0
-- Banco de dados `GestaoClinica` criado e populado
+- pip (gerenciador de pacotes Python)
 
 ## 🔧 Instalação
 
-1. Crie um ambiente virtual:
-- Windows
+1. Clone o repositório:
+```bash
+git clone https://github.com/brunoaudricc/IAAD-2025.git
+cd IAAD-2025
+```
+
+2. Crie um ambiente virtual:
+- **Windows**
 ```powershell
 python -m venv .venv
 ```
-- Linux ou IOS
-```powershell
+- **Linux ou macOS**
+```bash
 python3 -m venv .venv
 ```
 
-2. Ative o ambiente virtual:
-- Windows
+3. Ative o ambiente virtual:
+- **Windows**
 ```powershell
 .\.venv\Scripts\Activate
 ```
-- Linux ou IOS
-```powershell
+- **Linux ou macOS**
+```bash
 source .venv/bin/activate
 ```
 
-3. Instale as dependências:
-```powershell
+4. Instale as dependências:
+```bash
 pip install -r requirements.txt
 ```
 
-4. Configure a senha do MySQL no arquivo `app.py` (linha 319):
-```python
-password='sua_senha_aqui'  # ALTERAR COM SUA SENHA
+5. Configure as credenciais do banco de dados:
+```bash
+# Copie o arquivo de exemplo
+cp config.example.py config.py
 ```
 
-5. Execute o banco de dados SQL:
+Edite o arquivo `config.py` e configure suas credenciais:
+```python
+DB_CONFIG = {
+    'host': 'localhost',
+    'database': 'GestaoClinica',
+    'user': 'root',
+    'password': 'sua_senha_aqui'  # ALTERAR COM SUA SENHA
+}
+```
+
+> ⚠️ **Importante**: O arquivo `config.py` está no `.gitignore` e não será commitado. Mantenha suas credenciais seguras!
+
+6. Execute o banco de dados SQL:
 
 **Via MySQL Workbench**
 - Abra o MySQL Workbench
 - Conecte ao servidor MySQL
 - Abra uma nova Query Tab (Ctrl+T)
 - Vá em File → Open SQL Script
-- Selecione o arquivo "BD Consultas Médicas.sql"
-- Clique no ícone de raio ⚡ para executar
+- Selecione o arquivo `BD Consultas Médicas.sql`
+- Clique no ícone de raio ⚡ para executar todo o script
 
 
 ## ▶️ Como Executar
 
-1. Ative o ambiente virtual (se ainda não estiver ativo):
-- Windows
+1. Certifique-se de que o MySQL Server está rodando
+
+2. Ative o ambiente virtual (se ainda não estiver ativo):
+- **Windows**
 ```powershell
 .\.venv\Scripts\Activate
 ```
-- Linux ou IOS
-```powershell
+- **Linux ou macOS**
+```bash
 source .venv/bin/activate
 ```
 
-2. Execute o aplicativo:
-- Windows
-```powershell
+3. Execute o aplicativo:
+```bash
 python app.py
 ```
-- Linux ou IOS
-```powershell
-python3 app.py
-```
 
-Abra o app no navegador com a seguinte URL`http://127.0.0.1:8050`
+4. Abra o navegador e acesse:
+```
+http://127.0.0.1:8050
+```
 
 ## 🛑 Para Desativar o Ambiente Virtual
 
-```powershell
+```bash
 deactivate
 ```
 
 ## 📌 Funcionalidades
 
-### CRUD Completo para:
-- ✅ Clínicas (Create, Read, Update, Delete)
-- ✅ Médicos (Create, Read, Update, Delete)
-- ✅ Pacientes (Create, Read, Update, Delete)
-- ✅ Consultas (Create, Read, Update, Delete)
+### 🏠 Dashboard Inicial
+- **KPIs em tempo real**: Total de clínicas, médicos, pacientes e consultas
+- **Design moderno**: Interface responsiva com gradientes e animações
+- **Cards interativos**: Visualização clara dos principais indicadores
 
-### Dashboard
-- Estatísticas gerais do sistema
-- Contadores de registros em tempo real
+### 📊 CRUD Completo
 
-### Operações Disponíveis
-- **Adicionar**: Cadastro de novos registros com validação de campos
-- **Listar**: Visualização de todos os registros em tabelas interativas
-- **Editar**: 
-  - Digite a chave primária do registro (Código/CPF)
-  - Clique em "Buscar" para carregar os dados
-  - Os campos serão preenchidos automaticamente
-  - Altere os campos desejados e confirme a atualização
-- **Excluir**: 
-  - Digite a chave primária do registro
-  - Clique em "Buscar" para visualizar os dados
-  - Confirme a exclusão após revisar as informações
-  - Sistema valida integridade referencial (não permite excluir se houver vínculos)
+#### 🏥 Clínicas
+- ✅ Listar todas as clínicas cadastradas
+- ✅ Adicionar novas clínicas (código de 7 dígitos)
+- ✅ Editar informações das clínicas
+- ✅ Excluir clínicas (com validação de integridade referencial)
 
-## 📝 Observações
+#### 👨‍⚕️ Médicos
+- ✅ Listar médicos com informações completas
+- ✅ Adicionar médicos com especialidade e dados de contato
+- ✅ Editar cadastro de médicos
+- ✅ Excluir médicos (com validação de vínculos)
+- ✅ **Filtros avançados**: Nome, especialidade, gênero e ordenação
 
-- Certifique-se de que o MySQL Server está rodando antes de executar o sistema
-- O sistema usa conexão local (localhost)
-- Todas as operações são refletidas imediatamente no banco de dados
-- Interface responsiva com Bootstrap
+#### 👥 Pacientes
+- ✅ Listar pacientes cadastrados
+- ✅ Adicionar novos pacientes (validação de CPF)
+- ✅ Editar informações dos pacientes
+- ✅ Excluir pacientes (com validação de consultas)
+- ✅ **Filtros avançados**: Nome, faixa etária, gênero e mínimo de consultas
 
-### ⚠️ Integridade Referencial com CASCADE
-- **Ao excluir Clínica/Médico/Paciente**: Todas as consultas vinculadas são automaticamente excluídas (ON DELETE CASCADE)
-- **Ao atualizar chaves primárias**: As referências nas consultas são automaticamente atualizadas (ON UPDATE CASCADE)
-- O sistema exibe avisos antes de confirmar exclusões que afetarão consultas vinculadas
+#### 📅 Consultas
+- ✅ Listar todas as consultas agendadas
+- ✅ Agendar novas consultas (seleção de clínica, médico e paciente)
+- ✅ Editar horários de consultas
+- ✅ Excluir consultas
+- ✅ **Filtros avançados**: Paciente, clínica, especialidade e período de datas
+- ✅ Validação de chave composta (CodCli + CodMed + CPF + Data_Hora)
 
-### 🔑 Chaves Primárias
-- **Clínica**: Código (7 dígitos, ex: 0000001)
-- **Médico**: Código numérico (ex: 2819374)
-- **Paciente**: CPF (11 dígitos, ex: 34512389765)
-- **Consulta**: Chave composta (CodCli + CodMed + CPF + Data_Hora)
+#### ⏱️ Lista de Espera
+- ✅ Gerenciar fila de espera para consultas
+- ✅ Adicionar pacientes à lista de espera com prioridade
+- ✅ Visualizar tempo de espera calculado automaticamente
+- ✅ Cancelar itens da lista de espera
+- ✅ **Filtros avançados**: Especialidade, prioridade, período e ordenação personalizada
+- ✅ Status de acompanhamento (Aguardando, Confirmado, Cancelado)
+
+### 📈 Visualizações e Análises (Gráficos)
+
+#### Análises de Consultas
+- **Consultas por Especialidade**: Gráfico de pizza mostrando distribuição por área médica
+- **Crescimento de Consultas**: Linha temporal dos últimos 6 meses
+- **Consultas por Clínica**: Comparação entre unidades
+- **Lista de Espera vs Consultas Agendadas**: Comparativo em barras
+
+#### Análises de Profissionais e Pacientes
+- **Top 10 Médicos**: Ranking dos médicos com mais consultas
+- **Distribuição por Gênero (Médicos)**: Visualização da composição do corpo clínico
+- **Distribuição por Gênero (Pacientes)**: Perfil demográfico dos pacientes
+- **Faixa Etária dos Pacientes**: Distribuição por grupos de idade
+
+#### Análises Operacionais
+- **Pacientes Mais Frequentes**: Top 10 pacientes com mais consultas
+- **Taxa de Ocupação por Clínica**: Percentual de utilização
+- **Horários de Pico**: Análise dos períodos de maior demanda
+
+## 📝 Operações Disponíveis
+
+### Adicionar
+- Cadastro de novos registros com validação de campos obrigatórios
+- Feedback visual de sucesso ou erro
+
+### Listar
+- Visualização de todos os registros em tabelas interativas
+- Atualização automática após operações CRUD
+- Filtros avançados para busca personalizada
+
+### Editar
+1. Digite a chave primária do registro (Código/CPF)
+2. Clique em "Buscar" para carregar os dados
+3. Os campos serão preenchidos automaticamente
+4. Altere os campos desejados
+5. Confirme a atualização
+
+### Excluir
+1. Digite a chave primária do registro
+2. Clique em "Buscar" para visualizar os dados
+3. Revise as informações apresentadas
+4. Confirme a exclusão
+5. Sistema valida integridade referencial antes de excluir
+
+## ⚠️ Integridade Referencial
+
+### Exclusão em Cascata (ON DELETE CASCADE)
+Ao excluir os seguintes registros, **todas as entidades dependentes** são automaticamente excluídas:
+- **Clínica**: Remove todas as consultas e itens da lista de espera vinculados
+- **Médico**: Remove todas as consultas e itens da lista de espera vinculados
+- **Paciente**: Remove todas as consultas e itens da lista de espera vinculados
+
+> ⚠️ O sistema exibe avisos antes de confirmar exclusões que afetarão outros registros
+
+### Atualização em Cascata (ON UPDATE CASCADE)
+- Ao atualizar chaves primárias, as referências nas tabelas relacionadas são automaticamente atualizadas
+- Garante consistência dos dados em todo o banco
+
+## 🔑 Chaves Primárias
+
+| Tabela | Chave Primária | Formato | Exemplo |
+|--------|----------------|---------|---------|
+| **Clínica** | Código | 7 dígitos | 0000001 |
+| **Médico** | Código | Numérico | 2819374 |
+| **Paciente** | CPF | 11 dígitos | 12345678901 |
+| **Consulta** | Composta | CodCli + CodMed + CPF + Data_Hora | - |
+| **Lista de Espera** | IdEspera | Auto-incremento | 1, 2, 3... |
+
+## 📂 Estrutura do Projeto
+
+```
+IAAD-2025/
+├── app.py                      # Aplicação principal Dash
+├── config.py                   # Configurações do banco (não commitado)
+├── config.example.py           # Exemplo de configuração
+├── requirements.txt            # Dependências Python
+├── BD Consultas Médicas.sql    # Script do banco de dados
+├── modelo EER.mwb             # Modelo EER do MySQL Workbench
+├── .gitignore                 # Arquivos ignorados pelo Git
+└── README.md                  # Este arquivo
+```
+
+## 🛠️ Tecnologias e Bibliotecas
+
+- **dash**: Framework web para Python
+- **dash-bootstrap-components**: Componentes Bootstrap para Dash
+- **mysql-connector-python**: Conector MySQL
+- **pandas**: Manipulação e análise de dados
+- **plotly**: Visualizações gráficas interativas
+
+## 📊 Banco de Dados
+
+### Tabelas Principais
+1. **Clinica**: Armazena informações das clínicas
+2. **Medico**: Cadastro de médicos e especialidades
+3. **Paciente**: Dados dos pacientes
+4. **Consulta**: Registro de consultas agendadas
+5. **ListaEspera**: Gerenciamento da fila de espera
+
+## 📄 Licença
+
+Este projeto está sob a licença especificada no arquivo LICENSE.
+
+---
+
+**Desenvolvido para a disciplina de Introdução a Arquitetura e Administração de Dados (IAAD)**

@@ -26,3 +26,6 @@ Thumbs.db
 # Arquivos de banco de dados local
 *.db
 *.sqlite3
+
+# Configuração com senha
+config.py
