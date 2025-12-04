@@ -1958,7 +1958,7 @@ def search_consulta_list(n_clicks, cod_cli, cod_med, cpf_pac, data_hora_antiga):
     
     where_clause = " AND ".join(query_parts)
     
-    query = f"""SELECT c.*, cli.Nome as Clinica_Nome, m.Nome as Medico_Nome, p.Nome as Paciente_Nome
+    query = f"""SELECT c.*, cli.NomeCli as Clinica_Nome, m.NomeMed as Medico_Nome, p.NomePac as Paciente_Nome
                 FROM Consulta c
                 JOIN Clinica cli ON c.CodCli = cli.CodCli
                 JOIN Medico m ON c.CodMed = m.CodMed
