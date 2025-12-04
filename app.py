@@ -811,22 +811,94 @@ def delete_clinica(n_clicks, cod, current_refresh):
 
 # ==================== MÉDICOS ====================
 def render_medicos():
-    medicos = execute_query("SELECT * FROM Medico")
+    medicos = execute_query("""
+        SELECT m.CodMed, m.NomeMed, m.Genero, m.Especialidade, 
+               m.Telefone, m.Email, COUNT(c.CodMed) as TotalConsultas
+        FROM Medico m
+        LEFT JOIN Consulta c ON m.CodMed = c.CodMed
+        GROUP BY m.CodMed
+        ORDER BY TotalConsultas DESC
+    """)
     df = pd.DataFrame(medicos) if medicos else pd.DataFrame()
     
+    especialidades = execute_query("SELECT DISTINCT Especialidade FROM Medico ORDER BY Especialidade")
+    
     return html.Div([
-        html.H3("Gestão de Médicos", className="mb-4"),
+        html.H3([
+            html.I(className="fas fa-user-md me-3", style={'color': '#10b981'}),
+            "Gestão de Médicos"
+        ], className="mb-4"),
         dbc.Tabs(active_tab="tab-listar-medicos", children=[
             dbc.Tab(label="Listar", tab_id="tab-listar-medicos", children=[
                 html.Div([
-                    dash_table.DataTable(
-                        id='table-medicos',
-                        columns=[{"name": i, "id": i} for i in df.columns] if not df.empty else [],
-                        data=df.to_dict('records') if not df.empty else [],
-                        style_table={'overflowX': 'auto'},
-                        style_cell={'textAlign': 'left', 'padding': '10px'},
-                        style_header={'backgroundColor': 'rgb(230, 230, 230)', 'fontWeight': 'bold'}
-                    )
+                    # Filtros Avançados
+                    dbc.Card([
+                        dbc.CardBody([
+                            html.H5([html.I(className="fas fa-filter me-2"), "Filtros de Pesquisa"], className="mb-3"),
+                            dbc.Row([
+                                dbc.Col([
+                                    dbc.Label("Buscar por Nome"),
+                                    dbc.Input(id="filtro-medico-nome", type="text", 
+                                             placeholder="Digite o nome do médico...")
+                                ], md=3),
+                                dbc.Col([
+                                    dbc.Label("Especialidade"),
+                                    dcc.Dropdown(
+                                        id="filtro-medico-especialidade",
+                                        options=[{'label': 'Todas', 'value': 'all'}] + 
+                                                [{'label': e['Especialidade'], 'value': e['Especialidade']} for e in especialidades] if especialidades else [],
+                                        value='all',
+                                        clearable=False
+                                    )
+                                ], md=2),
+                                dbc.Col([
+                                    dbc.Label("Gênero"),
+                                    dcc.Dropdown(
+                                        id="filtro-medico-genero",
+                                        options=[
+                                            {'label': 'Todos', 'value': 'all'},
+                                            {'label': 'Masculino', 'value': 'M'},
+                                            {'label': 'Feminino', 'value': 'F'}
+                                        ],
+                                        value='all',
+                                        clearable=False
+                                    )
+                                ], md=2),
+                                dbc.Col([
+                                    dbc.Label("Ordenar por"),
+                                    dcc.Dropdown(
+                                        id="filtro-medico-ordenacao",
+                                        options=[
+                                            {'label': 'Mais Consultas', 'value': 'consultas_desc'},
+                                            {'label': 'Menos Consultas', 'value': 'consultas_asc'},
+                                            {'label': 'Nome (A-Z)', 'value': 'nome_asc'},
+                                            {'label': 'Nome (Z-A)', 'value': 'nome_desc'}
+                                        ],
+                                        value='consultas_desc',
+                                        clearable=False
+                                    )
+                                ], md=3),
+                                dbc.Col([
+                                    dbc.Label(html.Br()),
+                                    dbc.Button([html.I(className="fas fa-search me-2"), "Filtrar"], 
+                                              id="btn-filtrar-medicos", color="success", className="w-100")
+                                ], md=2),
+                            ])
+                        ])
+                    ], className="mb-3"),
+                    
+                    # Tabela de Resultados
+                    html.Div(id="medicos-filtrados-container", children=[
+                        dash_table.DataTable(
+                            id='table-medicos',
+                            columns=[{"name": i, "id": i} for i in df.columns] if not df.empty else [],
+                            data=df.to_dict('records') if not df.empty else [],
+                            style_table={'overflowX': 'auto'},
+                            style_cell={'textAlign': 'left', 'padding': '10px'},
+                            style_header={'backgroundColor': 'rgb(230, 230, 230)', 'fontWeight': 'bold'},
+                            page_size=15
+                        )
+                    ])
                 ], className="mt-3")
             ]),
             dbc.Tab(label="Adicionar", tab_id="tab-adicionar-medicos", children=[
@@ -934,6 +1006,90 @@ def render_medicos():
             ]),
         ])
     ])
+
+# Callback: Filtrar Médicos
+@app.callback(
+    Output("medicos-filtrados-container", "children"),
+    [Input("btn-filtrar-medicos", "n_clicks"),
+     Input("refresh-trigger", "data")],
+    [State("filtro-medico-nome", "value"),
+     State("filtro-medico-especialidade", "value"),
+     State("filtro-medico-genero", "value"),
+     State("filtro-medico-ordenacao", "value")],
+    prevent_initial_call=False
+)
+def filtrar_medicos(n_clicks, refresh, nome, especialidade, genero, ordenacao):
+    # Query com LEFT JOIN para incluir médicos sem consultas + COUNT + GROUP BY
+    query = """
+        SELECT m.CodMed as Codigo, m.NomeMed as Medico, 
+               CASE 
+                   WHEN m.Genero = 'M' THEN 'Masculino'
+                   WHEN m.Genero = 'F' THEN 'Feminino'
+                   ELSE 'Não informado'
+               END as Genero,
+               m.Especialidade, m.Telefone, m.Email,
+               COUNT(c.CodMed) as TotalConsultas
+        FROM Medico m
+        LEFT JOIN Consulta c ON m.CodMed = c.CodMed
+        WHERE 1=1
+    """
+    params = []
+    
+    # Filtro: Nome do Médico (LIKE para busca parcial)
+    if nome and nome.strip():
+        query += " AND m.NomeMed LIKE %s"
+        params.append(f"%{nome}%")
+    
+    # Filtro: Especialidade
+    if especialidade and especialidade != 'all':
+        query += " AND m.Especialidade = %s"
+        params.append(especialidade)
+    
+    # Filtro: Gênero
+    if genero and genero != 'all':
+        query += " AND m.Genero = %s"
+        params.append(genero)
+    
+    query += " GROUP BY m.CodMed, m.NomeMed, m.Genero, m.Especialidade, m.Telefone, m.Email"
+    
+    # Ordenação dinâmica
+    if ordenacao == 'consultas_desc':
+        query += " ORDER BY TotalConsultas DESC, m.NomeMed ASC"
+    elif ordenacao == 'consultas_asc':
+        query += " ORDER BY TotalConsultas ASC, m.NomeMed ASC"
+    elif ordenacao == 'nome_asc':
+        query += " ORDER BY m.NomeMed ASC"
+    elif ordenacao == 'nome_desc':
+        query += " ORDER BY m.NomeMed DESC"
+    
+    medicos = execute_query(query, tuple(params) if params else None)
+    df = pd.DataFrame(medicos) if medicos else pd.DataFrame()
+    
+    if df.empty:
+        return dbc.Alert([
+            html.I(className="fas fa-info-circle me-2"),
+            "Nenhum médico encontrado com os filtros selecionados."
+        ], color="info")
+    
+    return dash_table.DataTable(
+        columns=[{"name": i, "id": i} for i in df.columns],
+        data=df.to_dict('records'),
+        style_table={'overflowX': 'auto'},
+        style_cell={'textAlign': 'left', 'padding': '10px'},
+        style_header={'backgroundColor': 'rgb(230, 230, 230)', 'fontWeight': 'bold'},
+        page_size=15,
+        style_data_conditional=[
+            {
+                'if': {'row_index': 'odd'},
+                'backgroundColor': 'rgb(248, 248, 248)'
+            },
+            {
+                'if': {'filter_query': '{TotalConsultas} = 0'},
+                'backgroundColor': '#fee2e2',
+                'color': '#991b1b'
+            }
+        ]
+    )
 
 @app.callback(
     [Output("msg-medico", "children"),
@@ -1056,22 +1212,106 @@ def delete_medico(n_clicks, cod, current_refresh):
 
 # ==================== PACIENTES ====================
 def render_pacientes():
-    pacientes = execute_query("SELECT * FROM Paciente")
+    pacientes = execute_query("""
+        SELECT p.CpfPaciente, p.NomePac, 
+               DATE_FORMAT(p.DataNascimento, '%d/%m/%Y') as DataNascimento,
+               TIMESTAMPDIFF(YEAR, p.DataNascimento, CURDATE()) as Idade,
+               CASE 
+                   WHEN p.Genero = 'M' THEN 'Masculino'
+                   WHEN p.Genero = 'F' THEN 'Feminino'
+                   ELSE 'Não informado'
+               END as Genero,
+               p.Telefone, p.Email,
+               COUNT(c.CpfPaciente) as TotalConsultas
+        FROM Paciente p
+        LEFT JOIN Consulta c ON p.CpfPaciente = c.CpfPaciente
+        GROUP BY p.CpfPaciente
+        ORDER BY p.NomePac
+    """)
     df = pd.DataFrame(pacientes) if pacientes else pd.DataFrame()
     
     return html.Div([
-        html.H3("Gestão de Pacientes", className="mb-4"),
+        html.H3([
+            html.I(className="fas fa-users me-3", style={'color': '#3b82f6'}),
+            "Gestão de Pacientes"
+        ], className="mb-4"),
         dbc.Tabs(active_tab="tab-listar-pacientes", children=[
             dbc.Tab(label="Listar", tab_id="tab-listar-pacientes", children=[
                 html.Div([
-                    dash_table.DataTable(
-                        id='table-pacientes',
-                        columns=[{"name": i, "id": i} for i in df.columns] if not df.empty else [],
-                        data=df.to_dict('records') if not df.empty else [],
-                        style_table={'overflowX': 'auto'},
-                        style_cell={'textAlign': 'left', 'padding': '10px'},
-                        style_header={'backgroundColor': 'rgb(230, 230, 230)', 'fontWeight': 'bold'}
-                    )
+                    # Filtros Avançados
+                    dbc.Card([
+                        dbc.CardBody([
+                            html.H5([html.I(className="fas fa-filter me-2"), "Filtros de Pesquisa"], className="mb-3"),
+                            dbc.Row([
+                                dbc.Col([
+                                    dbc.Label("Buscar por Nome"),
+                                    dbc.Input(id="filtro-paciente-nome", type="text", 
+                                             placeholder="Digite o nome do paciente...")
+                                ], md=3),
+                                dbc.Col([
+                                    dbc.Label("Faixa Etária"),
+                                    dcc.Dropdown(
+                                        id="filtro-paciente-faixa-etaria",
+                                        options=[
+                                            {'label': 'Todas as Idades', 'value': 'all'},
+                                            {'label': 'Criança/Adolescente (0-17)', 'value': '0-17'},
+                                            {'label': 'Jovem Adulto (18-35)', 'value': '18-35'},
+                                            {'label': 'Adulto (36-59)', 'value': '36-59'},
+                                            {'label': 'Idoso (60+)', 'value': '60-150'}
+                                        ],
+                                        value='all',
+                                        clearable=False
+                                    )
+                                ], md=2),
+                                dbc.Col([
+                                    dbc.Label("Gênero"),
+                                    dcc.Dropdown(
+                                        id="filtro-paciente-genero",
+                                        options=[
+                                            {'label': 'Todos', 'value': 'all'},
+                                            {'label': 'Masculino', 'value': 'M'},
+                                            {'label': 'Feminino', 'value': 'F'}
+                                        ],
+                                        value='all',
+                                        clearable=False
+                                    )
+                                ], md=2),
+                                dbc.Col([
+                                    dbc.Label("Consultas Mínimas"),
+                                    dcc.Dropdown(
+                                        id="filtro-paciente-min-consultas",
+                                        options=[
+                                            {'label': 'Todos', 'value': 0},
+                                            {'label': 'Pelo menos 1', 'value': 1},
+                                            {'label': 'Pelo menos 2', 'value': 2},
+                                            {'label': 'Pelo menos 3', 'value': 3},
+                                            {'label': 'Pelo menos 5', 'value': 5}
+                                        ],
+                                        value=0,
+                                        clearable=False
+                                    )
+                                ], md=2),
+                                dbc.Col([
+                                    dbc.Label(html.Br()),
+                                    dbc.Button([html.I(className="fas fa-search me-2"), "Filtrar"], 
+                                              id="btn-filtrar-pacientes", color="primary", className="w-100")
+                                ], md=3),
+                            ])
+                        ])
+                    ], className="mb-3"),
+                    
+                    # Tabela de Resultados
+                    html.Div(id="pacientes-filtrados-container", children=[
+                        dash_table.DataTable(
+                            id='table-pacientes',
+                            columns=[{"name": i, "id": i} for i in df.columns] if not df.empty else [],
+                            data=df.to_dict('records') if not df.empty else [],
+                            style_table={'overflowX': 'auto'},
+                            style_cell={'textAlign': 'left', 'padding': '10px'},
+                            style_header={'backgroundColor': 'rgb(230, 230, 230)', 'fontWeight': 'bold'},
+                            page_size=15
+                        )
+                    ])
                 ], className="mt-3")
             ]),
             dbc.Tab(label="Adicionar", tab_id="tab-adicionar-pacientes", children=[
@@ -1179,6 +1419,90 @@ def render_pacientes():
             ]),
         ])
     ])
+
+# Callback: Filtrar Pacientes
+@app.callback(
+    Output("pacientes-filtrados-container", "children"),
+    [Input("btn-filtrar-pacientes", "n_clicks"),
+     Input("refresh-trigger", "data")],
+    [State("filtro-paciente-nome", "value"),
+     State("filtro-paciente-faixa-etaria", "value"),
+     State("filtro-paciente-genero", "value"),
+     State("filtro-paciente-min-consultas", "value")],
+    prevent_initial_call=False
+)
+def filtrar_pacientes(n_clicks, refresh, nome, faixa_etaria, genero, min_consultas):
+    # Query com TIMESTAMPDIFF + LEFT JOIN + COUNT + HAVING
+    query = """
+        SELECT p.CpfPaciente as CPF, p.NomePac as Paciente,
+               DATE_FORMAT(p.DataNascimento, '%d/%m/%Y') as DataNascimento,
+               TIMESTAMPDIFF(YEAR, p.DataNascimento, CURDATE()) as Idade,
+               CASE 
+                   WHEN p.Genero = 'M' THEN 'Masculino'
+                   WHEN p.Genero = 'F' THEN 'Feminino'
+                   ELSE 'Não informado'
+               END as Genero,
+               p.Telefone, p.Email,
+               COUNT(c.CpfPaciente) as TotalConsultas
+        FROM Paciente p
+        LEFT JOIN Consulta c ON p.CpfPaciente = c.CpfPaciente
+        WHERE 1=1
+    """
+    params = []
+    
+    # Filtro: Nome do Paciente (LIKE para busca parcial)
+    if nome and nome.strip():
+        query += " AND p.NomePac LIKE %s"
+        params.append(f"%{nome}%")
+    
+    # Filtro: Faixa Etária (usando TIMESTAMPDIFF)
+    if faixa_etaria and faixa_etaria != 'all':
+        idade_min, idade_max = map(int, faixa_etaria.split('-'))
+        query += " AND TIMESTAMPDIFF(YEAR, p.DataNascimento, CURDATE()) BETWEEN %s AND %s"
+        params.extend([idade_min, idade_max])
+    
+    # Filtro: Gênero
+    if genero and genero != 'all':
+        query += " AND p.Genero = %s"
+        params.append(genero)
+    
+    query += " GROUP BY p.CpfPaciente, p.NomePac, p.DataNascimento, p.Genero, p.Telefone, p.Email"
+    
+    # Filtro: Consultas Mínimas (usando HAVING)
+    if min_consultas and int(min_consultas) > 0:
+        query += " HAVING COUNT(c.CpfPaciente) >= %s"
+        params.append(int(min_consultas))
+    
+    query += " ORDER BY TotalConsultas DESC, p.NomePac ASC"
+    
+    pacientes = execute_query(query, tuple(params) if params else None)
+    df = pd.DataFrame(pacientes) if pacientes else pd.DataFrame()
+    
+    if df.empty:
+        return dbc.Alert([
+            html.I(className="fas fa-info-circle me-2"),
+            "Nenhum paciente encontrado com os filtros selecionados."
+        ], color="info")
+    
+    return dash_table.DataTable(
+        columns=[{"name": i, "id": i} for i in df.columns],
+        data=df.to_dict('records'),
+        style_table={'overflowX': 'auto'},
+        style_cell={'textAlign': 'left', 'padding': '10px'},
+        style_header={'backgroundColor': 'rgb(230, 230, 230)', 'fontWeight': 'bold'},
+        page_size=15,
+        style_data_conditional=[
+            {
+                'if': {'row_index': 'odd'},
+                'backgroundColor': 'rgb(248, 248, 248)'
+            },
+            {
+                'if': {'filter_query': '{TotalConsultas} = 0'},
+                'backgroundColor': '#fef3c7',
+                'color': '#92400e'
+            }
+        ]
+    )
 
 @app.callback(
     [Output("msg-paciente", "children"),
@@ -1302,32 +1626,85 @@ def delete_paciente(n_clicks, cpf, current_refresh):
 # ==================== CONSULTAS ====================
 def render_consultas():
     consultas = execute_query("""
-        SELECT c.CodCli, cl.NomeCli, c.CodMed, m.NomeMed, c.CpfPaciente, p.NomePac, c.Data_Hora
+        SELECT c.CodCli, cl.NomeCli as Clinica, c.CodMed, m.NomeMed as Medico, 
+               m.Especialidade, c.CpfPaciente, p.NomePac as Paciente, c.Data_Hora
         FROM Consulta c
         JOIN Clinica cl ON c.CodCli = cl.CodCli
         JOIN Medico m ON c.CodMed = m.CodMed
         JOIN Paciente p ON c.CpfPaciente = p.CpfPaciente
-        ORDER BY c.Data_Hora
+        ORDER BY c.Data_Hora DESC
     """)
     df = pd.DataFrame(consultas) if consultas else pd.DataFrame()
     
     clinicas = execute_query("SELECT CodCli, NomeCli FROM Clinica")
     medicos = execute_query("SELECT CodMed, NomeMed FROM Medico")
     pacientes = execute_query("SELECT CpfPaciente, NomePac FROM Paciente")
+    especialidades = execute_query("SELECT DISTINCT Especialidade FROM Medico ORDER BY Especialidade")
     
     return html.Div([
-        html.H3("Gestão de Consultas", className="mb-4"),
+        html.H3([
+            html.I(className="fas fa-calendar-check me-3", style={'color': '#0ea5e9'}),
+            "Gestão de Consultas"
+        ], className="mb-4"),
         dbc.Tabs(active_tab="tab-listar-consultas", children=[
             dbc.Tab(label="Listar", tab_id="tab-listar-consultas", children=[
                 html.Div([
-                    dash_table.DataTable(
-                        id='table-consultas',
-                        columns=[{"name": i, "id": i} for i in df.columns] if not df.empty else [],
-                        data=df.to_dict('records') if not df.empty else [],
-                        style_table={'overflowX': 'auto'},
-                        style_cell={'textAlign': 'left', 'padding': '10px'},
-                        style_header={'backgroundColor': 'rgb(230, 230, 230)', 'fontWeight': 'bold'}
-                    )
+                    # Filtros Avançados
+                    dbc.Card([
+                        dbc.CardBody([
+                            html.H5([html.I(className="fas fa-filter me-2"), "Filtros de Pesquisa"], className="mb-3"),
+                            dbc.Row([
+                                dbc.Col([
+                                    dbc.Label("Buscar Paciente"),
+                                    dbc.Input(id="filtro-consulta-paciente", type="text", 
+                                             placeholder="Digite o nome do paciente...")
+                                ], md=3),
+                                dbc.Col([
+                                    dbc.Label("Clínica"),
+                                    dcc.Dropdown(
+                                        id="filtro-consulta-clinica",
+                                        options=[{'label': 'Todas', 'value': 'all'}] + 
+                                                [{'label': c['NomeCli'], 'value': c['CodCli']} for c in clinicas] if clinicas else [],
+                                        value='all',
+                                        clearable=False
+                                    )
+                                ], md=3),
+                                dbc.Col([
+                                    dbc.Label("Especialidade"),
+                                    dcc.Dropdown(
+                                        id="filtro-consulta-especialidade",
+                                        options=[{'label': 'Todas', 'value': 'all'}] + 
+                                                [{'label': e['Especialidade'], 'value': e['Especialidade']} for e in especialidades] if especialidades else [],
+                                        value='all',
+                                        clearable=False
+                                    )
+                                ], md=2),
+                                dbc.Col([
+                                    dbc.Label("Data Inicial"),
+                                    dbc.Input(id="filtro-consulta-data-inicio", type="date")
+                                ], md=2),
+                                dbc.Col([
+                                    dbc.Label("Data Final"),
+                                    dbc.Input(id="filtro-consulta-data-fim", type="date")
+                                ], md=2),
+                            ]),
+                            dbc.Button([html.I(className="fas fa-search me-2"), "Filtrar"], 
+                                      id="btn-filtrar-consultas", color="primary", className="mt-3")
+                        ])
+                    ], className="mb-3"),
+                    
+                    # Tabela de Resultados
+                    html.Div(id="consultas-filtradas-container", children=[
+                        dash_table.DataTable(
+                            id='table-consultas',
+                            columns=[{"name": i, "id": i} for i in ['Clinica', 'Medico', 'Especialidade', 'Paciente', 'Data_Hora']] if not df.empty else [],
+                            data=df[['Clinica', 'Medico', 'Especialidade', 'Paciente', 'Data_Hora']].to_dict('records') if not df.empty else [],
+                            style_table={'overflowX': 'auto'},
+                            style_cell={'textAlign': 'left', 'padding': '10px'},
+                            style_header={'backgroundColor': 'rgb(230, 230, 230)', 'fontWeight': 'bold'},
+                            page_size=15
+                        )
+                    ])
                 ], className="mt-3")
             ]),
             dbc.Tab(label="Adicionar", tab_id="tab-adicionar-consultas", children=[
@@ -1450,6 +1827,83 @@ def render_consultas():
             ]),
         ])
     ])
+
+# Callback: Filtrar Consultas
+@app.callback(
+    Output("consultas-filtradas-container", "children"),
+    [Input("btn-filtrar-consultas", "n_clicks"),
+     Input("refresh-trigger", "data")],
+    [State("filtro-consulta-paciente", "value"),
+     State("filtro-consulta-clinica", "value"),
+     State("filtro-consulta-especialidade", "value"),
+     State("filtro-consulta-data-inicio", "value"),
+     State("filtro-consulta-data-fim", "value")],
+    prevent_initial_call=False
+)
+def filtrar_consultas(n_clicks, refresh, nome_paciente, clinica, especialidade, data_inicio, data_fim):
+    # Query base com JOINs
+    query = """
+        SELECT cl.NomeCli as Clinica, m.NomeMed as Medico, 
+               m.Especialidade, p.NomePac as Paciente, 
+               DATE_FORMAT(c.Data_Hora, '%d/%m/%Y %H:%i') as Data_Hora
+        FROM Consulta c
+        JOIN Clinica cl ON c.CodCli = cl.CodCli
+        JOIN Medico m ON c.CodMed = m.CodMed
+        JOIN Paciente p ON c.CpfPaciente = p.CpfPaciente
+        WHERE 1=1
+    """
+    params = []
+    
+    # Filtro: Nome do Paciente (LIKE para busca parcial)
+    if nome_paciente and nome_paciente.strip():
+        query += " AND p.NomePac LIKE %s"
+        params.append(f"%{nome_paciente}%")
+    
+    # Filtro: Clínica
+    if clinica and clinica != 'all':
+        query += " AND c.CodCli = %s"
+        params.append(clinica)
+    
+    # Filtro: Especialidade
+    if especialidade and especialidade != 'all':
+        query += " AND m.Especialidade = %s"
+        params.append(especialidade)
+    
+    # Filtro: Período (Data Inicial e Final)
+    if data_inicio:
+        query += " AND DATE(c.Data_Hora) >= %s"
+        params.append(data_inicio)
+    
+    if data_fim:
+        query += " AND DATE(c.Data_Hora) <= %s"
+        params.append(data_fim)
+    
+    query += " ORDER BY c.Data_Hora DESC"
+    
+    # Executar query com parâmetros
+    consultas = execute_query(query, tuple(params) if params else None)
+    df = pd.DataFrame(consultas) if consultas else pd.DataFrame()
+    
+    if df.empty:
+        return dbc.Alert([
+            html.I(className="fas fa-info-circle me-2"),
+            "Nenhuma consulta encontrada com os filtros selecionados."
+        ], color="info")
+    
+    return dash_table.DataTable(
+        columns=[{"name": i, "id": i} for i in df.columns],
+        data=df.to_dict('records'),
+        style_table={'overflowX': 'auto'},
+        style_cell={'textAlign': 'left', 'padding': '10px'},
+        style_header={'backgroundColor': 'rgb(230, 230, 230)', 'fontWeight': 'bold'},
+        page_size=15,
+        style_data_conditional=[
+            {
+                'if': {'row_index': 'odd'},
+                'backgroundColor': 'rgb(248, 248, 248)'
+            }
+        ]
+    )
 
 @app.callback(
     [Output("msg-consulta", "children"),
@@ -1735,7 +2189,7 @@ def delete_consulta(n_clicks, selected_data, current_refresh):
 
 # ==================== LISTA DE ESPERA ====================
 def render_lista_espera():
-    # Buscar dados da lista de espera
+    # Buscar dados da lista de espera com tempo de espera calculado
     lista_espera = execute_query("""
         SELECT 
             le.IdEspera,
@@ -1743,10 +2197,11 @@ def render_lista_espera():
             m.NomeMed AS Medico,
             m.Especialidade,
             p.NomePac AS Paciente,
-            le.DataHoraDesejada,
+            DATE_FORMAT(le.DataHoraDesejada, '%d/%m/%Y %H:%i') as DataHoraDesejada,
             le.Prioridade,
             le.Status,
-            le.DataHoraCadastro,
+            DATE_FORMAT(le.DataHoraCadastro, '%d/%m/%Y %H:%i') as DataHoraCadastro,
+            TIMESTAMPDIFF(DAY, le.DataHoraCadastro, NOW()) as DiasEspera,
             le.CodCli,
             le.CodMed,
             le.CpfPaciente
@@ -1784,8 +2239,11 @@ def render_lista_espera():
     medicos = execute_query("SELECT CodMed, NomeMed, Especialidade FROM Medico")
     pacientes = execute_query("SELECT CpfPaciente, NomePac FROM Paciente")
     
+    # Buscar especialidades para filtro
+    especialidades = execute_query("SELECT DISTINCT Especialidade FROM Medico ORDER BY Especialidade")
+    
     # Preparar colunas para exibição (sem IDs internos)
-    colunas_exibir = ['Clinica', 'Medico', 'Especialidade', 'Paciente', 'DataHoraDesejada', 'Prioridade', 'Status', 'DataHoraCadastro']
+    colunas_exibir = ['Clinica', 'Medico', 'Especialidade', 'Paciente', 'DataHoraDesejada', 'Prioridade', 'Status', 'DataHoraCadastro', 'DiasEspera']
     df_exibir = df_espera[colunas_exibir] if not df_espera.empty else pd.DataFrame()
     
     return html.Div([
@@ -1802,21 +2260,90 @@ def render_lista_espera():
                         html.I(className="fas fa-info-circle me-2"),
                         "Pacientes em ordem de prioridade e data de cadastro. Quando uma consulta for cancelada, o próximo da fila será automaticamente agendado."
                     ], color="info", className="mt-3"),
-                    dash_table.DataTable(
-                        id='table-lista-espera',
-                        columns=[{"name": i, "id": i} for i in df_exibir.columns] if not df_exibir.empty else [],
-                        data=df_exibir.to_dict('records') if not df_exibir.empty else [],
-                        style_table={'overflowX': 'auto'},
-                        style_cell={'textAlign': 'left', 'padding': '10px'},
-                        style_header={'backgroundColor': 'rgb(230, 230, 230)', 'fontWeight': 'bold'},
-                        style_data_conditional=[
-                            {
-                                'if': {'filter_query': '{Prioridade} > 1'},
-                                'backgroundColor': '#fef3c7',
-                                'fontWeight': 'bold'
-                            }
-                        ]
-                    )
+                    
+                    # Filtros Avançados
+                    dbc.Card([
+                        dbc.CardBody([
+                            html.H5([html.I(className="fas fa-filter me-2"), "Filtros de Pesquisa"], className="mb-3"),
+                            dbc.Row([
+                                dbc.Col([
+                                    dbc.Label("Especialidade"),
+                                    dcc.Dropdown(
+                                        id="filtro-espera-especialidade",
+                                        options=[{'label': 'Todas', 'value': 'all'}] + 
+                                                [{'label': e['Especialidade'], 'value': e['Especialidade']} for e in especialidades] if especialidades else [],
+                                        value='all',
+                                        clearable=False
+                                    )
+                                ], md=3),
+                                dbc.Col([
+                                    dbc.Label("Prioridade Mínima"),
+                                    dcc.Dropdown(
+                                        id="filtro-espera-prioridade",
+                                        options=[
+                                            {'label': 'Todas', 'value': 0},
+                                            {'label': 'Média (1+)', 'value': 1},
+                                            {'label': 'Alta (2+)', 'value': 2},
+                                            {'label': 'Urgente (3+)', 'value': 3}
+                                        ],
+                                        value=0,
+                                        clearable=False
+                                    )
+                                ], md=2),
+                                dbc.Col([
+                                    dbc.Label("Data Desejada - Início"),
+                                    dbc.Input(id="filtro-espera-data-inicio", type="date")
+                                ], md=2),
+                                dbc.Col([
+                                    dbc.Label("Data Desejada - Fim"),
+                                    dbc.Input(id="filtro-espera-data-fim", type="date")
+                                ], md=2),
+                                dbc.Col([
+                                    dbc.Label("Ordenar por"),
+                                    dcc.Dropdown(
+                                        id="filtro-espera-ordenacao",
+                                        options=[
+                                            {'label': 'Mais Dias Esperando', 'value': 'dias_desc'},
+                                            {'label': 'Maior Prioridade', 'value': 'prioridade_desc'},
+                                            {'label': 'Data Desejada', 'value': 'data_desejada'}
+                                        ],
+                                        value='prioridade_desc',
+                                        clearable=False
+                                    )
+                                ], md=2),
+                                dbc.Col([
+                                    dbc.Label(html.Br()),
+                                    dbc.Button([html.I(className="fas fa-search me-2"), "Filtrar"], 
+                                              id="btn-filtrar-espera", color="warning", className="w-100")
+                                ], md=1),
+                            ])
+                        ])
+                    ], className="mb-3"),
+                    
+                    # Tabela de Resultados
+                    html.Div(id="espera-filtrada-container", children=[
+                        dash_table.DataTable(
+                            id='table-lista-espera',
+                            columns=[{"name": i, "id": i} for i in df_exibir.columns] if not df_exibir.empty else [],
+                            data=df_exibir.to_dict('records') if not df_exibir.empty else [],
+                            style_table={'overflowX': 'auto'},
+                            style_cell={'textAlign': 'left', 'padding': '10px'},
+                            style_header={'backgroundColor': 'rgb(230, 230, 230)', 'fontWeight': 'bold'},
+                            page_size=15,
+                            style_data_conditional=[
+                                {
+                                    'if': {'filter_query': '{Prioridade} >= 3'},
+                                    'backgroundColor': '#fee2e2',
+                                    'fontWeight': 'bold'
+                                },
+                                {
+                                    'if': {'filter_query': '{Prioridade} = 2'},
+                                    'backgroundColor': '#fef3c7',
+                                    'fontWeight': 'bold'
+                                }
+                            ]
+                        )
+                    ])
                 ], className="mt-3")
             ]),
             
@@ -1910,6 +2437,109 @@ def render_lista_espera():
             ]),
         ])
     ])
+
+# Callback: Filtrar Lista de Espera
+@app.callback(
+    Output("espera-filtrada-container", "children"),
+    [Input("btn-filtrar-espera", "n_clicks"),
+     Input("refresh-trigger", "data")],
+    [State("filtro-espera-especialidade", "value"),
+     State("filtro-espera-prioridade", "value"),
+     State("filtro-espera-data-inicio", "value"),
+     State("filtro-espera-data-fim", "value"),
+     State("filtro-espera-ordenacao", "value")],
+    prevent_initial_call=False
+)
+def filtrar_lista_espera(n_clicks, refresh, especialidade, prioridade, data_inicio, data_fim, ordenacao):
+    # Query com TIMESTAMPDIFF para calcular dias de espera + múltiplos JOINs
+    query = """
+        SELECT 
+            c.NomeCli as Clinica,
+            m.NomeMed as Medico,
+            m.Especialidade,
+            p.NomePac as Paciente,
+            DATE_FORMAT(le.DataHoraDesejada, '%d/%m/%Y %H:%i') as DataHoraDesejada,
+            le.Prioridade,
+            le.Status,
+            DATE_FORMAT(le.DataHoraCadastro, '%d/%m/%Y %H:%i') as DataHoraCadastro,
+            TIMESTAMPDIFF(DAY, le.DataHoraCadastro, NOW()) as DiasEspera
+        FROM ListaEspera le
+        JOIN Clinica c ON le.CodCli = c.CodCli
+        JOIN Medico m ON le.CodMed = m.CodMed
+        JOIN Paciente p ON le.CpfPaciente = p.CpfPaciente
+        WHERE le.Status = 'aguardando'
+    """
+    params = []
+    
+    # Filtro: Especialidade
+    if especialidade and especialidade != 'all':
+        query += " AND m.Especialidade = %s"
+        params.append(especialidade)
+    
+    # Filtro: Prioridade Mínima
+    if prioridade and int(prioridade) > 0:
+        query += " AND le.Prioridade >= %s"
+        params.append(int(prioridade))
+    
+    # Filtro: Período Desejado (Data Inicial e Final)
+    if data_inicio:
+        query += " AND DATE(le.DataHoraDesejada) >= %s"
+        params.append(data_inicio)
+    
+    if data_fim:
+        query += " AND DATE(le.DataHoraDesejada) <= %s"
+        params.append(data_fim)
+    
+    # Ordenação Dinâmica
+    if ordenacao == 'dias_desc':
+        query += " ORDER BY DiasEspera DESC, le.Prioridade DESC"
+    elif ordenacao == 'prioridade_desc':
+        query += " ORDER BY le.Prioridade DESC, DiasEspera DESC"
+    elif ordenacao == 'data_desejada':
+        query += " ORDER BY le.DataHoraDesejada ASC, le.Prioridade DESC"
+    else:
+        query += " ORDER BY le.Prioridade DESC, le.DataHoraCadastro ASC"
+    
+    espera = execute_query(query, tuple(params) if params else None)
+    df = pd.DataFrame(espera) if espera else pd.DataFrame()
+    
+    if df.empty:
+        return dbc.Alert([
+            html.I(className="fas fa-info-circle me-2"),
+            "Nenhum paciente na lista de espera com os filtros selecionados."
+        ], color="info")
+    
+    return dash_table.DataTable(
+        columns=[{"name": i, "id": i} for i in df.columns],
+        data=df.to_dict('records'),
+        style_table={'overflowX': 'auto'},
+        style_cell={'textAlign': 'left', 'padding': '10px'},
+        style_header={'backgroundColor': 'rgb(230, 230, 230)', 'fontWeight': 'bold'},
+        page_size=15,
+        style_data_conditional=[
+            {
+                'if': {'row_index': 'odd'},
+                'backgroundColor': 'rgb(248, 248, 248)'
+            },
+            {
+                'if': {'filter_query': '{Prioridade} >= 3'},
+                'backgroundColor': '#fee2e2',
+                'fontWeight': 'bold',
+                'color': '#991b1b'
+            },
+            {
+                'if': {'filter_query': '{Prioridade} = 2'},
+                'backgroundColor': '#fef3c7',
+                'fontWeight': 'bold',
+                'color': '#92400e'
+            },
+            {
+                'if': {'filter_query': '{DiasEspera} >= 30'},
+                'backgroundColor': '#dbeafe',
+                'color': '#1e40af'
+            }
+        ]
+    )
 
 # Callback: Adicionar à Lista de Espera
 @app.callback(
@@ -2080,6 +2710,59 @@ def render_graficos():
             ], lg=3, md=6, className="mb-4"),
         ]),
         
+        # Seção de Consultas Avançadas
+        html.Hr(className="my-4"),
+        dbc.Row([
+            dbc.Col([
+                html.H3([
+                    html.I(className="fas fa-chart-line me-2"),
+                    "Consultas Avançadas"
+                ], className="text-primary mb-3")
+            ])
+        ]),
+        
+        # Linha 1 de Consultas Avançadas
+        dbc.Row([
+            dbc.Col([
+                dbc.Card([
+                    dbc.CardBody([
+                        html.H5("Pacientes por Faixa Etária", className="text-center mb-3"),
+                        dcc.Graph(id='graph-faixa-etaria')
+                    ])
+                ], className="shadow-sm")
+            ], lg=6, md=12, className="mb-4"),
+            
+            dbc.Col([
+                dbc.Card([
+                    dbc.CardBody([
+                        html.H5("Pacientes com Múltiplas Consultas", className="text-center mb-3"),
+                        dcc.Graph(id='graph-pacientes-frequentes')
+                    ])
+                ], className="shadow-sm")
+            ], lg=6, md=12, className="mb-4"),
+        ]),
+        
+        # Linha 2 de Consultas Avançadas
+        dbc.Row([
+            dbc.Col([
+                dbc.Card([
+                    dbc.CardBody([
+                        html.H5("Taxa de Ocupação por Clínica", className="text-center mb-3"),
+                        dcc.Graph(id='graph-taxa-ocupacao')
+                    ])
+                ], className="shadow-sm")
+            ], lg=6, md=12, className="mb-4"),
+            
+            dbc.Col([
+                dbc.Card([
+                    dbc.CardBody([
+                        html.H5("Horários de Pico de Consultas", className="text-center mb-3"),
+                        dcc.Graph(id='graph-horarios-pico')
+                    ])
+                ], className="shadow-sm")
+            ], lg=6, md=12, className="mb-4"),
+        ]),
+        
         dcc.Interval(id='interval-graficos', interval=30000, n_intervals=0)
     ])
 
@@ -2090,7 +2773,11 @@ def render_graficos():
      Output('graph-crescimento', 'figure'),
      Output('graph-top-medicos', 'figure'),
      Output('graph-genero-medicos', 'figure'),
-     Output('graph-genero-pacientes', 'figure')],
+     Output('graph-genero-pacientes', 'figure'),
+     Output('graph-faixa-etaria', 'figure'),
+     Output('graph-pacientes-frequentes', 'figure'),
+     Output('graph-taxa-ocupacao', 'figure'),
+     Output('graph-horarios-pico', 'figure')],
     [Input('interval-graficos', 'n_intervals'),
      Input('refresh-trigger', 'data')]
 )
@@ -2280,7 +2967,114 @@ def update_graficos(n, refresh):
         fig_gen_pac = go.Figure()
         fig_gen_pac.add_annotation(text="Sem dados", showarrow=False)
     
-    return fig_esp, fig_lista, fig_cli, fig_cresc, fig_top, fig_gen_med, fig_gen_pac
+    # 8. Pacientes por Faixa Etária (usando TIMESTAMPDIFF)
+    data_faixa_etaria = execute_query("""
+        SELECT 
+            CASE 
+                WHEN TIMESTAMPDIFF(YEAR, DataNascimento, CURDATE()) < 18 THEN 'Criança/Adolescente (0-17)'
+                WHEN TIMESTAMPDIFF(YEAR, DataNascimento, CURDATE()) BETWEEN 18 AND 35 THEN 'Jovem Adulto (18-35)'
+                WHEN TIMESTAMPDIFF(YEAR, DataNascimento, CURDATE()) BETWEEN 36 AND 59 THEN 'Adulto (36-59)'
+                ELSE 'Idoso (60+)'
+            END as FaixaEtaria,
+            COUNT(*) as Total
+        FROM Paciente
+        GROUP BY FaixaEtaria
+        ORDER BY 
+            CASE FaixaEtaria
+                WHEN 'Criança/Adolescente (0-17)' THEN 1
+                WHEN 'Jovem Adulto (18-35)' THEN 2
+                WHEN 'Adulto (36-59)' THEN 3
+                WHEN 'Idoso (60+)' THEN 4
+            END
+    """)
+    
+    if data_faixa_etaria:
+        df_faixa = pd.DataFrame(data_faixa_etaria)
+        fig_faixa = px.bar(df_faixa, x='FaixaEtaria', y='Total', 
+                          color_discrete_sequence=['#8b5cf6'])
+        fig_faixa.update_layout(xaxis_title='', yaxis_title='Pacientes', showlegend=False,
+                               margin=dict(t=0, b=0, l=0, r=0))
+        fig_faixa.update_traces(text=df_faixa['Total'], textposition='outside')
+    else:
+        fig_faixa = go.Figure()
+        fig_faixa.add_annotation(text="Sem dados", showarrow=False)
+    
+    # 9. Pacientes com Múltiplas Consultas (usando COUNT + HAVING)
+    data_pacientes_freq = execute_query("""
+        SELECT 
+            p.NomePac as Paciente,
+            TIMESTAMPDIFF(YEAR, p.DataNascimento, CURDATE()) as Idade,
+            COUNT(*) as TotalConsultas
+        FROM Consulta c
+        JOIN Paciente p ON c.CpfPaciente = p.CpfPaciente
+        GROUP BY p.CpfPaciente, p.NomePac, p.DataNascimento
+        HAVING COUNT(*) >= 2
+        ORDER BY TotalConsultas DESC
+        LIMIT 10
+    """)
+    
+    if data_pacientes_freq:
+        df_freq = pd.DataFrame(data_pacientes_freq)
+        fig_freq = px.bar(df_freq, y='Paciente', x='TotalConsultas', orientation='h',
+                         color='TotalConsultas', color_continuous_scale='Reds',
+                         hover_data={'Idade': True, 'TotalConsultas': True, 'Paciente': False})
+        fig_freq.update_layout(yaxis_title='', xaxis_title='Consultas', showlegend=False,
+                              margin=dict(t=0, b=0, l=0, r=0))
+        fig_freq.update_traces(text=df_freq['TotalConsultas'], textposition='outside')
+        fig_freq.update_yaxes(categoryorder='total ascending')
+        fig_freq.update_xaxes(tickformat='d', dtick=1)
+    else:
+        fig_freq = go.Figure()
+        fig_freq.add_annotation(text="Sem pacientes com múltiplas consultas", showarrow=False)
+    
+    # 10. Taxa de Ocupação por Clínica (usando LEFT JOIN e COUNT)
+    data_ocupacao = execute_query("""
+        SELECT 
+            cl.NomeCli as Clinica,
+            COUNT(DISTINCT c.CodMed) as TotalMedicos,
+            COUNT(c.CodMed) as TotalConsultas,
+            ROUND(COUNT(c.CodMed) / GREATEST(COUNT(DISTINCT c.CodMed), 1), 2) as TaxaOcupacao
+        FROM Clinica cl
+        LEFT JOIN Consulta c ON cl.CodCli = c.CodCli
+        GROUP BY cl.CodCli, cl.NomeCli
+        ORDER BY TaxaOcupacao DESC
+    """)
+    
+    if data_ocupacao:
+        df_ocup = pd.DataFrame(data_ocupacao)
+        fig_ocup = px.bar(df_ocup, x='Clinica', y='TaxaOcupacao',
+                         color='TaxaOcupacao', color_continuous_scale='Viridis',
+                         hover_data={'TotalMedicos': True, 'TotalConsultas': True})
+        fig_ocup.update_layout(xaxis_title='', yaxis_title='Consultas/Médico', 
+                              showlegend=False, margin=dict(t=0, b=0, l=0, r=0))
+        fig_ocup.update_traces(text=[f'{x:.1f}' for x in df_ocup['TaxaOcupacao']], 
+                              textposition='outside')
+    else:
+        fig_ocup = go.Figure()
+        fig_ocup.add_annotation(text="Sem dados", showarrow=False)
+    
+    # 11. Horários de Pico de Consultas (usando DATE_FORMAT para extrair hora)
+    data_horarios = execute_query("""
+        SELECT 
+            DATE_FORMAT(Data_Hora, '%H:00') as Horario,
+            COUNT(*) as Total
+        FROM Consulta
+        GROUP BY Horario
+        ORDER BY Horario
+    """)
+    
+    if data_horarios:
+        df_horarios = pd.DataFrame(data_horarios)
+        fig_horarios = px.line(df_horarios, x='Horario', y='Total', 
+                              markers=True, color_discrete_sequence=['#06b6d4'])
+        fig_horarios.update_layout(xaxis_title='Horário', yaxis_title='Consultas',
+                                  showlegend=False, margin=dict(t=0, b=0, l=0, r=0))
+        fig_horarios.update_traces(line=dict(width=3))
+    else:
+        fig_horarios = go.Figure()
+        fig_horarios.add_annotation(text="Sem dados", showarrow=False)
+    
+    return fig_esp, fig_lista, fig_cli, fig_cresc, fig_top, fig_gen_med, fig_gen_pac, fig_faixa, fig_freq, fig_ocup, fig_horarios
 
 if __name__ == '__main__':
     app.run(debug=True)
