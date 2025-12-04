@@ -40,7 +40,19 @@ CREATE TABLE Consulta (
     CONSTRAINT FK_Consulta_Paciente FOREIGN KEY (CpfPaciente) REFERENCES Paciente(CpfPaciente) ON DELETE CASCADE ON UPDATE CASCADE,
     
     -- Chave Primária Composta (evita duplicidade de agendamento exato)
-    PRIMARY KEY (CodCli, CodMed, CpfPaciente, Data_Hora)
+    PRIMARY KEY (CodCli, CodMed, CpfPaciente, Data_Hora),
+    
+    -- Constraint única: Um médico não pode ter múltiplas consultas no mesmo horário na mesma clínica
+    CONSTRAINT UQ_Medico_Horario UNIQUE (CodCli, CodMed, Data_Hora),
+    
+    -- Constraint única: Um paciente não pode ter múltiplas consultas no mesmo horário
+    CONSTRAINT UQ_Paciente_Horario UNIQUE (CpfPaciente, Data_Hora),
+    
+    -- Validação: Data/Hora da consulta deve ser futura (comentado pois dados de exemplo são passados)
+    -- CONSTRAINT CHK_Data_Futura CHECK (Data_Hora >= NOW())
+    
+    -- Validação: Horário de atendimento entre 6h e 22h
+    CONSTRAINT CHK_Horario_Comercial CHECK (HOUR(Data_Hora) BETWEEN 6 AND 22)
 );
 
 -- Tabela Clínica
@@ -152,12 +164,21 @@ CREATE TABLE ListaEspera (
     CpfPaciente VARCHAR(11) NOT NULL,
     DataHoraDesejada DATETIME NOT NULL,
     DataHoraCadastro DATETIME DEFAULT CURRENT_TIMESTAMP,
-    Prioridade INT DEFAULT 0, -- Maior número = maior prioridade
+    Prioridade INT DEFAULT 0, -- Maior número = maior prioridade (0-5)
     Status ENUM('aguardando', 'agendado', 'expirado', 'cancelado') DEFAULT 'aguardando',
     
     CONSTRAINT FK_Espera_Clinica FOREIGN KEY (CodCli) REFERENCES Clinica(CodCli) ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT FK_Espera_Medico FOREIGN KEY (CodMed) REFERENCES Medico(CodMed) ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT FK_Espera_Paciente FOREIGN KEY (CpfPaciente) REFERENCES Paciente(CpfPaciente) ON DELETE CASCADE ON UPDATE CASCADE
+    CONSTRAINT FK_Espera_Paciente FOREIGN KEY (CpfPaciente) REFERENCES Paciente(CpfPaciente) ON DELETE CASCADE ON UPDATE CASCADE,
+    
+    -- Evita que o mesmo paciente esteja 2x na fila para o mesmo médico/clínica/horário aguardando
+    CONSTRAINT UQ_Espera_Paciente UNIQUE (CodCli, CodMed, CpfPaciente, DataHoraDesejada, Status),
+    
+    -- Validação: Prioridade entre 0 e 5
+    CONSTRAINT CHK_Prioridade CHECK (Prioridade BETWEEN 0 AND 5),
+    
+    -- Validação: Horário desejado entre 6h e 22h
+    CONSTRAINT CHK_Horario_Desejado CHECK (HOUR(DataHoraDesejada) BETWEEN 6 AND 22)
 );
 
 -- Tabela de log para registrar as promoções da lista de espera
@@ -172,37 +193,50 @@ CREATE TABLE LogListaEspera (
     Mensagem VARCHAR(255)
 );
 
--- ==================== TRIGGER ====================
--- Trigger que é acionado quando uma consulta é cancelada (DELETE)
--- Automaticamente agenda o próximo paciente da lista de espera
+-- ==================== PROCEDIMENTO ARMAZENADO ====================
+-- Procedimento para promover paciente da lista de espera após cancelamento
+-- Deve ser chamado pela aplicação após deletar uma consulta
 
 DELIMITER //
 
-CREATE TRIGGER trg_promover_lista_espera
-AFTER DELETE ON Consulta
-FOR EACH ROW
+CREATE PROCEDURE sp_promover_lista_espera(
+    IN p_cod_cli CHAR(7),
+    IN p_cod_med INT,
+    IN p_data_hora DATETIME,
+    IN p_cpf_cancelado VARCHAR(11)
+)
 BEGIN
     DECLARE v_id_espera INT;
     DECLARE v_cpf_paciente VARCHAR(11);
     DECLARE v_data_hora_desejada DATETIME;
     
-    -- Busca o próximo paciente na lista de espera para o mesmo médico, clínica e horário
-    -- Ordena por prioridade (maior primeiro) e depois por data de cadastro (mais antigo primeiro)
+    -- Busca o próximo paciente na lista de espera para o mesmo médico e clínica
+    -- Prioriza quem quer horário igual ou anterior (já passou da hora desejada)
+    -- Ordena por: 1) Prioridade maior, 2) Data desejada mais próxima, 3) Cadastro mais antigo
     SELECT IdEspera, CpfPaciente, DataHoraDesejada
     INTO v_id_espera, v_cpf_paciente, v_data_hora_desejada
     FROM ListaEspera
-    WHERE CodCli = OLD.CodCli
-      AND CodMed = OLD.CodMed
-      AND DataHoraDesejada = OLD.Data_Hora
+    WHERE CodCli = p_cod_cli
+      AND CodMed = p_cod_med
       AND Status = 'aguardando'
-    ORDER BY Prioridade DESC, DataHoraCadastro ASC
+      -- Busca quem quer este horário OU horários anteriores (já passou do desejado)
+      AND DataHoraDesejada <= p_data_hora
+      -- Garante que o paciente não tem conflito de horário
+      AND CpfPaciente NOT IN (
+          SELECT CpfPaciente FROM Consulta 
+          WHERE Data_Hora = p_data_hora
+      )
+    ORDER BY 
+        Prioridade DESC,                                    -- Maior prioridade primeiro
+        ABS(TIMESTAMPDIFF(MINUTE, DataHoraDesejada, p_data_hora)) ASC,  -- Horário mais próximo
+        DataHoraCadastro ASC                               -- Mais antigo na fila
     LIMIT 1;
     
     -- Se encontrou alguém na lista de espera
     IF v_id_espera IS NOT NULL THEN
         -- Insere a nova consulta para o paciente da lista de espera
         INSERT INTO Consulta (CodCli, CodMed, CpfPaciente, Data_Hora)
-        VALUES (OLD.CodCli, OLD.CodMed, v_cpf_paciente, OLD.Data_Hora);
+        VALUES (p_cod_cli, p_cod_med, v_cpf_paciente, p_data_hora);
         
         -- Atualiza o status na lista de espera
         UPDATE ListaEspera
@@ -211,8 +245,9 @@ BEGIN
         
         -- Registra no log
         INSERT INTO LogListaEspera (IdEspera, CodCli, CodMed, CpfPaciente, DataHoraConsulta, Mensagem)
-        VALUES (v_id_espera, OLD.CodCli, OLD.CodMed, v_cpf_paciente, OLD.Data_Hora, 
-                CONCAT('Paciente promovido da lista de espera. Consulta original cancelada por: ', OLD.CpfPaciente));
+        VALUES (v_id_espera, p_cod_cli, p_cod_med, v_cpf_paciente, p_data_hora, 
+                CONCAT('Paciente promovido da lista de espera. Consulta original cancelada por: ', p_cpf_cancelado, 
+                       '. Horário desejado original: ', v_data_hora_desejada));
     END IF;
 END //
 

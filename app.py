@@ -2176,11 +2176,30 @@ def select_consulta_for_delete(selected_value):
 )
 def delete_consulta(n_clicks, selected_data, current_refresh):
     if n_clicks and selected_data:
-        query = "DELETE FROM Consulta WHERE CodCli = %s AND CodMed = %s AND CpfPaciente = %s AND Data_Hora = %s"
-        if execute_update(query, (selected_data['CodCli'], selected_data['CodMed'], 
-                                  selected_data['CpfPaciente'], selected_data['Data_Hora'])):
-            return dbc.Alert("Consulta excluída com sucesso!", color="success"), current_refresh + 1
-        return dbc.Alert("Erro ao excluir consulta!", color="danger"), current_refresh
+        try:
+            conn = mysql.connector.connect(**DB_CONFIG)
+            cursor = conn.cursor()
+            
+            # Primeiro deleta a consulta
+            query = "DELETE FROM Consulta WHERE CodCli = %s AND CodMed = %s AND CpfPaciente = %s AND Data_Hora = %s"
+            cursor.execute(query, (selected_data['CodCli'], selected_data['CodMed'], 
+                                   selected_data['CpfPaciente'], selected_data['Data_Hora']))
+            
+            # Depois chama o procedimento para promover da lista de espera
+            cursor.callproc('sp_promover_lista_espera', [
+                selected_data['CodCli'],
+                selected_data['CodMed'],
+                selected_data['Data_Hora'],
+                selected_data['CpfPaciente']
+            ])
+            
+            conn.commit()
+            cursor.close()
+            conn.close()
+            
+            return dbc.Alert("Consulta excluída com sucesso! Verificando lista de espera...", color="success"), current_refresh + 1
+        except Error as e:
+            return dbc.Alert(f"Erro ao excluir consulta: {str(e)}", color="danger"), current_refresh
     return "", current_refresh
 
 # ==================== LISTA DE ESPERA ====================
@@ -2238,8 +2257,8 @@ def render_lista_espera():
     # Buscar especialidades para filtro
     especialidades = execute_query("SELECT DISTINCT Especialidade FROM Medico ORDER BY Especialidade")
     
-    # Preparar colunas para exibição (sem IDs internos)
-    colunas_exibir = ['Clinica', 'Medico', 'Especialidade', 'Paciente', 'DataHoraDesejada', 'Prioridade', 'Status', 'DataHoraCadastro', 'DiasEspera']
+    # Preparar colunas para exibição (incluindo ID da lista de espera)
+    colunas_exibir = ['IdEspera', 'Clinica', 'Medico', 'Especialidade', 'Paciente', 'DataHoraDesejada', 'Prioridade', 'Status', 'DataHoraCadastro', 'DiasEspera']
     df_exibir = df_espera[colunas_exibir] if not df_espera.empty else pd.DataFrame()
     
     return html.Div([
@@ -2320,7 +2339,7 @@ def render_lista_espera():
                     html.Div(id="espera-filtrada-container", children=[
                         dash_table.DataTable(
                             id='table-lista-espera',
-                            columns=[{"name": i, "id": i} for i in df_exibir.columns] if not df_exibir.empty else [],
+                            columns=[{"name": i, "id": i} for i in colunas_exibir],
                             data=df_exibir.to_dict('records') if not df_exibir.empty else [],
                             style_table={'overflowX': 'auto'},
                             style_cell={'textAlign': 'left', 'padding': '10px'},
@@ -2450,6 +2469,7 @@ def filtrar_lista_espera(n_clicks, refresh, especialidade, prioridade, data_inic
     # Query com TIMESTAMPDIFF para calcular dias de espera + múltiplos JOINs
     query = """
         SELECT 
+            le.IdEspera,
             c.NomeCli as Clinica,
             m.NomeMed as Medico,
             m.Especialidade,
