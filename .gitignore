@@ -20,6 +20,9 @@ __pycache__/
 .DS_Store
 Thumbs.db
 
+# Configuração com senha
+config.py
+
 # Logs
 *.log
 
