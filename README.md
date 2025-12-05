@@ -198,30 +198,6 @@ deactivate
 4. Confirme a exclusão
 5. Sistema valida integridade referencial antes de excluir
 
-## ⚠️ Integridade Referencial
-
-### Exclusão em Cascata (ON DELETE CASCADE)
-Ao excluir os seguintes registros, **todas as entidades dependentes** são automaticamente excluídas:
-- **Clínica**: Remove todas as consultas e itens da lista de espera vinculados
-- **Médico**: Remove todas as consultas e itens da lista de espera vinculados
-- **Paciente**: Remove todas as consultas e itens da lista de espera vinculados
-
-> ⚠️ O sistema exibe avisos antes de confirmar exclusões que afetarão outros registros
-
-### Atualização em Cascata (ON UPDATE CASCADE)
-- Ao atualizar chaves primárias, as referências nas tabelas relacionadas são automaticamente atualizadas
-- Garante consistência dos dados em todo o banco
-
-## 🔑 Chaves Primárias
-
-| Tabela | Chave Primária | Formato | Exemplo |
-|--------|----------------|---------|---------|
-| **Clínica** | Código | 7 dígitos | 0000001 |
-| **Médico** | Código | Numérico | 2819374 |
-| **Paciente** | CPF | 11 dígitos | 12345678901 |
-| **Consulta** | Composta | CodCli + CodMed + CPF + Data_Hora | - |
-| **Lista de Espera** | IdEspera | Auto-incremento | 1, 2, 3... |
-
 ## 📂 Estrutura do Projeto
 
 ```
@@ -243,15 +219,6 @@ IAAD-2025/
 - **mysql-connector-python**: Conector MySQL
 - **pandas**: Manipulação e análise de dados
 - **plotly**: Visualizações gráficas interativas
-
-## 📊 Banco de Dados
-
-### Tabelas Principais
-1. **Clinica**: Armazena informações das clínicas
-2. **Medico**: Cadastro de médicos e especialidades
-3. **Paciente**: Dados dos pacientes
-4. **Consulta**: Registro de consultas agendadas
-5. **ListaEspera**: Gerenciamento da fila de espera
 
 ## 📄 Licença
 
